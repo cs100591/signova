@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { supabaseClient } from "@/lib/supabase";
 import { RobotWaiting } from "@/components/illustrations";
 
 export default function LoginPage() {
@@ -21,6 +22,17 @@ export default function LoginPage() {
     confirmPassword: "",
   });
 
+  // Check if already logged in
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        router.push("/contracts");
+      }
+    };
+    checkSession();
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -34,18 +46,58 @@ export default function LoginPage() {
         return;
       }
 
-      // TODO: Integrate Supabase Auth
-      // Temporary mock success
-      setTimeout(() => {
-        setSuccess(isLogin ? "Login successful!" : "Account created!");
-        setIsLoading(false);
-        // Redirect to dashboard after 2 seconds
+      if (isLogin) {
+        // Sign in
+        const { data, error: signInError } = await supabaseClient.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (signInError) throw signInError;
+
+        setSuccess("Login successful! Redirecting...");
+        
+        // Check if onboarding is complete
+        const { data: profile } = await supabaseClient
+          .from('profiles')
+          .select('onboarding_complete')
+          .eq('id', data.user?.id)
+          .single();
+
         setTimeout(() => {
-          router.push("/contracts");
-        }, 1500);
-      }, 1500);
-    } catch (err) {
-      setError("An error occurred. Please try again.");
+          if (profile?.onboarding_complete) {
+            router.push("/contracts");
+          } else {
+            router.push("/onboarding");
+          }
+        }, 1000);
+
+      } else {
+        // Sign up
+        const { data, error: signUpError } = await supabaseClient.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/contracts`,
+          },
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (data.user?.identities?.length === 0) {
+          setError("An account with this email already exists. Please sign in.");
+        } else {
+          setSuccess("Account created! Please check your email to confirm your account.");
+          setTimeout(() => {
+            setIsLogin(true);
+            setSuccess("");
+          }, 3000);
+        }
+      }
+    } catch (err: any) {
+      console.error("Auth error:", err);
+      setError(err.message || "An error occurred. Please try again.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -138,6 +190,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   className="w-full pl-12 pr-12 py-3 bg-white border border-[#ddd5c8] rounded-xl focus:outline-none focus:border-[#c8873a] transition-colors"
                   required
+                  minLength={6}
                 />
                 <button
                   type="button"
@@ -165,7 +218,7 @@ export default function LoginPage() {
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     placeholder="••••••••"
                     className="w-full pl-12 pr-4 py-3 bg-white border border-[#ddd5c8] rounded-xl focus:outline-none focus:border-[#c8873a] transition-colors"
-                    required
+                    required={!isLogin}
                   />
                 </div>
               </motion.div>
@@ -201,7 +254,7 @@ export default function LoginPage() {
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1714] text-[#f5f0e8] rounded-xl font-medium hover:bg-[#2e2a26] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <>
                   {isLogin ? "Sign In" : "Create Account"}

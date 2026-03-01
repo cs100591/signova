@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { supabaseServer } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const result = await pool.query(
-      'SELECT * FROM contracts ORDER BY created_at DESC'
-    );
-    return NextResponse.json(result.rows);
+    const { data, error } = await supabaseServer
+      .from('contracts')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return NextResponse.json(data || []);
   } catch (error) {
     console.error('Database error:', error);
     // Return mock data for demo
@@ -49,14 +53,24 @@ export async function POST(request: Request) {
     body = await request.json();
     const { workspace_id, name, type, amount, effective_date, expiry_date, summary, file_url } = body;
     
-    const result = await pool.query(
-      `INSERT INTO contracts (workspace_id, name, type, amount, effective_date, expiry_date, summary, file_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [workspace_id || 1, name, type, amount, effective_date, expiry_date, summary, file_url]
-    );
+    const { data, error } = await supabaseServer
+      .from('contracts')
+      .insert({
+        workspace_id: workspace_id || 1,
+        name,
+        type,
+        amount,
+        effective_date,
+        expiry_date,
+        summary,
+        file_url,
+      })
+      .select()
+      .single();
     
-    return NextResponse.json(result.rows[0], { status: 201 });
+    if (error) throw error;
+    
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
     console.error('Database error:', error);
     // Return mock success for demo
