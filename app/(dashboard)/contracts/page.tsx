@@ -14,14 +14,22 @@ import {
 import { 
   EmptyContracts, 
   EmptySearch,
-  ContractNDA,
-  ContractEmployment,
-  ContractLease,
-  ContractContractor,
   DashboardTotalContracts,
   DashboardExpiring,
   DashboardHighRisk,
-  DashboardAnalyzed
+  DashboardAnalyzed,
+  IconNDA,
+  IconMSA,
+  IconRenewal,
+  IconInternal,
+  IconContractor,
+  IconEmployment,
+  IconLease,
+  IconService,
+  IconPartnership,
+  IconSaaS,
+  IconGeneral,
+  IconExpired
 } from "@/components/illustrations";
 
 interface Contract {
@@ -119,21 +127,38 @@ const mockContracts: Contract[] = [
 const contractTypes = ["All", "MSA", "NDA", "Employment", "Contractor", "Renewal", "Lease", "Service", "Other"];
 const contractStatuses = ["All", "Active", "Expiring Soon", "Expired", "Indefinite"];
 
-// Helper function to get illustration component based on contract type
-const getContractTypeIllustration = (type: string) => {
-  const illustrationProps = { width: 48, height: 48, className: "text-[#6B7280]" };
+// Helper function to get icon component based on contract type
+const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
+  const iconProps = { width: 28, height: 28, className: isExpired ? "text-red-600" : "text-[#6B7280]" };
+  
+  if (isExpired) {
+    return <IconExpired {...iconProps} />;
+  }
   
   switch (type) {
     case "NDA":
-      return <ContractNDA {...illustrationProps} />;
+      return <IconNDA {...iconProps} />;
+    case "MSA":
+      return <IconMSA {...iconProps} className="text-blue-600" />;
     case "Employment":
-      return <ContractEmployment {...illustrationProps} />;
-    case "Lease":
-      return <ContractLease {...illustrationProps} />;
+      return <IconEmployment {...iconProps} className="text-green-600" />;
     case "Contractor":
-      return <ContractContractor {...illustrationProps} />;
+      return <IconContractor {...iconProps} />;
+    case "Lease":
+      return <IconLease {...iconProps} className="text-amber-600" />;
+    case "Renewal":
+      return <IconRenewal {...iconProps} className="text-amber-600" />;
+    case "Internal":
+      return <IconInternal {...iconProps} className="text-purple-600" />;
+    case "Service":
+      return <IconService {...iconProps} className="text-blue-600" />;
+    case "Partnership":
+      return <IconPartnership {...iconProps} className="text-purple-600" />;
+    case "SaaS":
+    case "License":
+      return <IconSaaS {...iconProps} className="text-green-600" />;
     default:
-      return null;
+      return <IconGeneral {...iconProps} />;
   }
 };
 
@@ -441,11 +466,7 @@ export default function ContractsPage() {
                       {/* Header with status indicator */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="w-12 h-12 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
-                          {getContractTypeIllustration(contract.type) || (
-                            <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          )}
+                          {getContractTypeIcon(contract.type, contract.status === 'expired')}
                         </div>
                         <div className={`w-2 h-2 rounded-full ${getStatusIndicator(contract.status)}`} />
                       </div>
