@@ -5,16 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseClient } from "@/lib/supabase";
 import { RobotWaiting } from "@/components/illustrations";
-
-// Create Supabase client directly in this component
-const getSupabaseClient = () => {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,8 +25,7 @@ export default function LoginPage() {
   // Check if already logged in
   useEffect(() => {
     const checkSession = async () => {
-      const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
         router.push("/contracts");
       }
@@ -44,8 +35,7 @@ export default function LoginPage() {
 
   const checkOnboardingAndRedirect = async (userId: string | undefined) => {
     try {
-      const supabase = getSupabaseClient();
-      const { data: profile } = await supabase
+      const { data: profile } = await supabaseClient
         .from('profiles')
         .select('onboarding_complete')
         .eq('id', userId)
@@ -72,11 +62,9 @@ export default function LoginPage() {
         return;
       }
 
-      const supabase = getSupabaseClient();
-
       if (isLogin) {
         // Sign in
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        const { data, error: signInError } = await supabaseClient.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
@@ -91,7 +79,7 @@ export default function LoginPage() {
         }, 800);
       } else {
         // Sign up
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabaseClient.auth.signUp({
           email: formData.email,
           password: formData.password,
         });
