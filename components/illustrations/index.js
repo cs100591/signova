@@ -68,12 +68,11 @@ export {
 
 // Robot Illustrations
 export {
-  RobotWaiting,
-  RobotSelecting,
-  RobotComplete,
-  RobotThinking,
-  RobotFoundRisk,
-  RobotAllClear
+  WaitingRobot,
+  ThinkingRobot,
+  ClearRobot,
+  RiskRobot,
+  CompleteRobot
 } from './RobotIllustrations';
 
 // Card Icons — Contract Type Icons
