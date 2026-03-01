@@ -57,7 +57,7 @@ Tone: Professional, helpful, and calm.`;
       ],
       maxTokens: 1000,
       temperature: 0.7,
-    });
+    } as any);
 
     // Add disclaimer
     const response = `${result.text}\n\n---\n*⚠️ This analysis is for informational purposes only and does not constitute legal advice. For important matters, please consult a qualified attorney.*`;
