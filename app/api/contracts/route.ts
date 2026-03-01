@@ -46,9 +46,10 @@ export async function POST(request: Request) {
       ? String(amount)
       : null;
 
+    const contractName = (name || 'Untitled Contract').trim();
     const payload = {
       user_id: user.id,
-      name: (name || 'Untitled Contract').trim(),
+      title: contractName,  // DB has "title TEXT NOT NULL" (original schema)
       type,
       amount: amountStr,
       currency: currency || 'USD',
