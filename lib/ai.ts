@@ -106,8 +106,30 @@ Tone: Clear, Human, Not verbose`;
   const { text } = await Promise.race([aiPromise, timeoutPromise]) as { text: string };
 
   try {
-    return JSON.parse(text);
-  } catch {
+    // Clean the response text to extract JSON
+    let cleanedText = text.trim();
+    
+    // Remove markdown code blocks if present
+    if (cleanedText.startsWith('```')) {
+      const lines = cleanedText.split('\n');
+      // Remove first line (```json or ```)
+      lines.shift();
+      // Remove last line if it's ```
+      if (lines[lines.length - 1]?.trim() === '```') {
+        lines.pop();
+      }
+      cleanedText = lines.join('\n').trim();
+    }
+    
+    // Try to find JSON object in the text
+    const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanedText = jsonMatch[0];
+    }
+    
+    return JSON.parse(cleanedText);
+  } catch (e) {
+    console.error('[AI] Failed to parse JSON:', e, 'Original text:', text.slice(0, 200));
     return null;
   }
 }

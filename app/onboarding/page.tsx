@@ -164,32 +164,41 @@ export default function OnboardingPage() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    
+
     try {
       if (!user) {
         router.push('/login');
         return;
       }
-      
-      // Save to Supabase profiles table
-      const { error } = await supabaseClient
+
+      // Use upsert to insert or update profile
+      const { data, error } = await supabaseClient
         .from('profiles')
-        .update({
+        .upsert({
+          id: user.id,
+          email: user.email,
           country: formData.country,
           contract_types: formData.contractTypes,
           preferred_language: formData.language,
           onboarding_complete: true,
           updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id',
+          ignoreDuplicates: false,
         })
-        .eq('id', user.id);
-      
+        .select();
+
       if (error) {
         console.error('Supabase error:', error);
         throw error;
       }
-      
-      console.log('Profile saved successfully');
-      
+
+      if (!data || data.length === 0) {
+        throw new Error('Profile was not saved properly');
+      }
+
+      console.log('Profile saved successfully:', data);
+
       // Redirect to contracts page
       router.push('/contracts');
     } catch (error: any) {

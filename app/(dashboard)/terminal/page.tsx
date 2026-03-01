@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Loader2, FileText, Plus, Trash2, History, MessageSquare, Upload, ChevronDown, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface Message {
   id: string;
@@ -10,6 +12,7 @@ interface Message {
   content: string;
   timestamp: Date;
   isTyping?: boolean;
+  displayContent?: string; // For typewriter effect
 }
 
 interface ChatSession {
@@ -50,17 +53,136 @@ const GENERAL_QUESTIONS = [
   "What should a service agreement include?",
 ];
 
-// Typing animation component
-function TypingIndicator() {
+// Braille spinner characters for Homebrew-style loading
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+// Loading messages that cycle like Homebrew
+const LOADING_MESSAGES = [
+  "Analyzing contract structure...",
+  "Checking termination clauses...",
+  "Comparing to industry standards...",
+  "Reviewing liability terms...",
+  "Evaluating payment conditions...",
+  "Cross-referencing legal standards...",
+  "Generating response...",
+];
+
+// Homebrew-style loading indicator
+function HomebrewLoadingIndicator() {
+  const [frame, setFrame] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    const frameInterval = setInterval(() => {
+      setFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
+    }, 80);
+
+    const messageInterval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+    }, 2000);
+
+    return () => {
+      clearInterval(frameInterval);
+      clearInterval(messageInterval);
+    };
+  }, []);
+
   return (
     <div className="flex justify-start">
-      <div className="bg-white border border-[#E5E7EB] px-4 py-3 rounded-2xl">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-          <span className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-          <span className="w-2 h-2 bg-[#9CA3AF] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+      <div className="bg-[#1A1A1A] text-white px-4 py-3 rounded-2xl font-mono text-sm">
+        <div className="flex items-center gap-3">
+          <span className="text-[#F59E0B] w-4 text-center">{SPINNER_FRAMES[frame]}</span>
+          <span>{LOADING_MESSAGES[messageIndex]}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Typewriter message component with Markdown support
+function TypewriterMessage({ 
+  content, 
+  isComplete, 
+  onComplete 
+}: { 
+  content: string; 
+  isComplete: boolean; 
+  onComplete: () => void;
+}) {
+  const [displayText, setDisplayText] = useState(isComplete ? content : "");
+  const [showCursor, setShowCursor] = useState(!isComplete);
+
+  useEffect(() => {
+    if (isComplete) {
+      setDisplayText(content);
+      setShowCursor(false);
+      return;
+    }
+
+    let currentIndex = 0;
+    const interval = setInterval(() => {
+      if (currentIndex < content.length) {
+        setDisplayText(content.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        clearInterval(interval);
+        setShowCursor(false);
+        onComplete();
+      }
+    }, 30); // 30ms per character
+
+    return () => clearInterval(interval);
+  }, [content, isComplete, onComplete]);
+
+  // Cursor blink effect
+  useEffect(() => {
+    if (!showCursor) return;
+    
+    const blinkInterval = setInterval(() => {
+      // Cursor blinking handled by CSS
+    }, 530);
+    
+    return () => clearInterval(blinkInterval);
+  }, [showCursor]);
+
+  return (
+    <div className="text-[15px] leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Custom styling for markdown elements
+          h1: ({children}) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
+          h2: ({children}) => <h2 className="text-base font-semibold mt-3 mb-2">{children}</h2>,
+          h3: ({children}) => <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>,
+          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
+          ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
+          ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
+          li: ({children}) => <li className="ml-2">{children}</li>,
+          code: ({children, className}) => {
+            const isInline = !className;
+            return isInline ? (
+              <code className="bg-[#F3F4F6] px-1.5 py-0.5 rounded text-sm font-mono">
+                {children}
+              </code>
+            ) : (
+              <pre className="bg-[#1A1A1A] text-white p-3 rounded-lg overflow-x-auto my-2">
+                <code className="text-sm font-mono">{children}</code>
+              </pre>
+            );
+          },
+          blockquote: ({children}) => (
+            <blockquote className="border-l-4 border-[#F59E0B] pl-3 italic my-2 text-[#6B7280]">
+              {children}
+            </blockquote>
+          ),
+          strong: ({children}) => <strong className="font-semibold text-[#1A1A1A]">{children}</strong>,
+        }}
+      >
+        {displayText}
+      </ReactMarkdown>
+      {showCursor && (
+        <span className="inline-block w-2 h-4 bg-[#F59E0B] ml-0.5 animate-pulse" />
+      )}
     </div>
   );
 }
@@ -78,6 +200,7 @@ export default function TerminalPage() {
   const [showContractDropdown, setShowContractDropdown] = useState(false);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [inputMode, setInputMode] = useState<"paste" | "saved" | "upload">("paste");
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -154,7 +277,7 @@ export default function TerminalPage() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, typingMessageId]);
 
   const handleSendMessage = async (question: string) => {
     if (!question.trim()) return;
@@ -195,6 +318,7 @@ export default function TerminalPage() {
 
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
+      setTypingMessageId(assistantMessage.id);
       saveChatHistory(finalMessages, contractText);
     } catch (error) {
       console.error("Chat error:", error);
@@ -202,8 +326,7 @@ export default function TerminalPage() {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content:
-          "I apologize, but I encountered an error processing your request. Please try again.",
+        content: "I apologize, but I encountered an error processing your request. Please try again.",
         timestamp: new Date(),
       };
 
@@ -213,6 +336,13 @@ export default function TerminalPage() {
     }
   };
 
+  const handleTypingComplete = useCallback((messageId: string) => {
+    if (typingMessageId === messageId) {
+      setTypingMessageId(null);
+    }
+  }, [typingMessageId]);
+
+  // Rest of the component continues...
   // When user clicks "Analyze Contract" - starts chat with contract loaded
   const handleAnalyzeContract = async () => {
     if (!contractText.trim()) return;
@@ -296,6 +426,7 @@ export default function TerminalPage() {
     setInputText("");
     setShowContractInput(true);
     setInputMode("paste");
+    setTypingMessageId(null);
   };
 
   const loadChat = (session: ChatSession) => {
@@ -303,6 +434,7 @@ export default function TerminalPage() {
     setContractText(session.contractText || "");
     setShowContractInput(false);
     setShowHistory(false);
+    setTypingMessageId(null);
   };
 
   const deleteChat = (id: string, e: React.MouseEvent) => {
@@ -651,9 +783,19 @@ export default function TerminalPage() {
                             : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
                         }`}
                       >
-                        <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                          {message.content}
-                        </div>
+                        {message.role === "assistant" && message.id === typingMessageId ? (
+                          <TypewriterMessage
+                            content={message.content}
+                            isComplete={false}
+                            onComplete={() => handleTypingComplete(message.id)}
+                          />
+                        ) : (
+                          <div className="text-[15px] leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {message.content}
+                            </ReactMarkdown>
+                          </div>
+                        )}
                         <div
                           className={`text-xs mt-2 ${
                             message.role === "user"
@@ -670,7 +812,7 @@ export default function TerminalPage() {
                     </div>
                   ))}
 
-                  {isAnalyzing && <TypingIndicator />}
+                  {isAnalyzing && <HomebrewLoadingIndicator />}
 
                   <div ref={messagesEndRef} />
                 </div>
