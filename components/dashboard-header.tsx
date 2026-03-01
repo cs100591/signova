@@ -1,0 +1,44 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { LogOut, User } from "lucide-react";
+import Link from "next/link";
+
+export default function DashboardHeader() {
+  const router = useRouter();
+
+  const handleLogout = () => {
+    // TODO: 实现实际的登出逻辑（清除 session/token）
+    router.push("/");
+  };
+
+  return (
+    <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-[#E5E7EB]">
+      <div className="flex items-center gap-4">
+        <Link 
+          href="/" 
+          className="text-sm text-[#6B7280] hover:text-[#1A1A1A] flex items-center gap-1"
+        >
+          ← Back to website
+        </Link>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#F8F7F4]">
+          <div className="w-8 h-8 rounded-full bg-[#1A1A1A] flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-sm text-[#374151]">user@example.com</span>
+        </div>
+
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#6B7280] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign out
+        </button>
+      </div>
+    </header>
+  );
+}
