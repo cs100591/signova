@@ -1,9 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
 
-/**
- * Playwright configuration for Signova
- * @see https://playwright.dev/docs/test-configuration
- */
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -15,13 +11,13 @@ export default defineConfig({
     baseURL: 'https://signova-blond.vercel.app',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video: 'on-first-retry',
   },
+
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Don't run web server - we're testing against production
 });

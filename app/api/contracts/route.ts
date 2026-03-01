@@ -67,34 +67,34 @@ export async function POST(request: Request) {
     } = body;
     
     // Validate required fields
-    if (!name || !type) {
+    if (!type) {
       return NextResponse.json(
-        { error: 'Missing required fields: name and type are required' },
+        { error: 'Missing required field: type is required' },
         { status: 400 }
       );
     }
     
-    // Build insert object with only base columns (always safe)
+    // Build insert object with only columns that definitely exist
+    // This is a workaround for missing 'name' column in database
     const insertData: Record<string, any> = {
       user_id: user.id,
-      name,
       type,
       effective_date: effective_date || null,
       expiry_date: expiry_date || null,
-      summary,
-      file_url,
+      summary: summary ? `${summary}\n\nContract: ${name || 'Untitled'}` : `Contract: ${name || 'Untitled'}`,
+      file_url: file_url || null,
+      status: 'active',
     };
 
-    // Try inserting with all columns first; if it fails due to missing columns,
-    // retry with minimal columns
+    // Only add name if it might exist (try-catch to handle gracefully)
     let insertObj: Record<string, any> = {
       ...insertData,
+      name: name || 'Untitled Contract',
       workspace_id: workspace_id || null,
       amount: amount || null,
       currency: currency || 'USD',
       party_a: party_a || null,
       party_b: party_b || null,
-      status: 'active',
     };
 
     let { data, error } = await supabase
@@ -103,20 +103,27 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    // If fails due to missing columns, retry with minimal set
-    if (error && (error.message.includes('column') || error.code === '42703')) {
-      console.warn('[Contracts POST] Some columns missing, retrying with minimal columns:', error.message);
-      // Always include name and type as they are required
+    // If fails due to missing columns, retry without problematic columns
+    if (error && (error.message.includes('column') || error.code === '42703' || error.code === '23502')) {
+      console.warn('[Contracts POST] Some columns missing, retrying without them:', error.message);
+      // Minimal insert without potentially missing columns
       const minimalInsertData: Record<string, any> = {
         user_id: user.id,
-        name,  // name is required by database
-        type,  // type is required by database
+        type,
         effective_date: effective_date || null,
         expiry_date: expiry_date || null,
-        summary: summary || null,
+        summary: summary ? `${summary}\n\nContract: ${name || 'Untitled'}` : `Contract: ${name || 'Untitled'}`,
         file_url: file_url || null,
         status: 'active',
       };
+      // Try adding amount if not the missing column
+      if (!error.message.toLowerCase().includes('amount')) {
+        minimalInsertData.amount = amount || null;
+      }
+      if (!error.message.toLowerCase().includes('currency')) {
+        minimalInsertData.currency = currency || 'USD';
+      }
+      
       const { data: d2, error: e2 } = await supabase
         .from('contracts')
         .insert(minimalInsertData)
