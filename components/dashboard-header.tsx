@@ -29,10 +29,10 @@ export default function DashboardHeader() {
     <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-[#E5E7EB]">
       <div className="flex items-center gap-4">
         <Link 
-          href="/" 
+          href="/contracts" 
           className="text-sm text-[#6B7280] hover:text-[#1A1A1A] flex items-center gap-1"
         >
-          ← Back to website
+          ← Back to dashboard
         </Link>
       </div>
 

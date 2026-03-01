@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase";
 
 export async function GET(
   request: Request,
@@ -7,39 +7,91 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const result = await pool.query(
-      'SELECT * FROM contracts WHERE id = $1',
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      // Return mock data for demo
-      return NextResponse.json({
-        id: parseInt(id),
-        name: "Acme Corp MSA",
-        type: "Service Agreement",
-        amount: "$150,000/year",
-        effective_date: "2023-10-24",
-        expiry_date: "2025-10-24",
-        summary: "Master Service Agreement for Q3 enterprise software deliverables.",
-        file_url: "/uploads/sample.pdf",
-        created_at: new Date().toISOString(),
-      });
+    const supabase = await createSupabaseServerClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
-    return NextResponse.json(result.rows[0]);
-  } catch (error) {
-    console.error('Database error:', error);
-    return NextResponse.json({
-      id: 1,
-      name: "Acme Corp MSA",
-      type: "Service Agreement",
-      amount: "$150,000/year",
-      effective_date: "2023-10-24",
-      expiry_date: "2025-10-24",
-      summary: "Master Service Agreement for Q3 enterprise software deliverables.",
-      file_url: "/uploads/sample.pdf",
-      created_at: new Date().toISOString(),
-    });
+
+    const { data, error } = await supabase
+      .from("contracts")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !data) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error("Contract GET error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createSupabaseServerClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+
+    const { data, error } = await supabase
+      .from("contracts")
+      .update({ ...body, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data);
+  } catch (error: any) {
+    console.error("Contract PATCH error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createSupabaseServerClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { error } = await supabase
+      .from("contracts")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Contract DELETE error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
