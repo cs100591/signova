@@ -1,6 +1,145 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 
+// --- Structured analysis types ---
+export interface Finding {
+  category: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  title: string;
+  issue: string;
+  quote: string;
+  explanation: string;
+  suggestion: string;
+}
+
+export interface AnalysisResult {
+  riskScore: number;
+  riskVerdict: string;
+  findings: Finding[];
+  missing: string[];
+  summary: string[];
+}
+
+function extractField(block: string, field: string): string {
+  // Match "field: value" — value can span multiple lines until the next field or end
+  const regex = new RegExp(`^${field}:\\s*([\\s\\S]*?)(?=\\n[a-z]+:|$)`, 'im');
+  const match = block.match(regex);
+  return match ? match[1].trim() : '';
+}
+
+function parseAnalysisResult(text: string): AnalysisResult {
+  // Risk score
+  const scoreSection = text.match(/---RISK_SCORE---\s*(\d+)\s*\n(.+)/);
+  const riskScore = scoreSection ? Math.min(100, Math.max(0, parseInt(scoreSection[1]))) : 50;
+  const riskVerdict = scoreSection ? scoreSection[2].trim() : 'Contract review required';
+
+  // Findings
+  const findings: Finding[] = [];
+  const findingMatches = [...text.matchAll(/FINDING_START([\s\S]*?)FINDING_END/g)];
+  for (const match of findingMatches) {
+    const block = match[1];
+    findings.push({
+      category: extractField(block, 'category') || 'Other',
+      severity: (extractField(block, 'severity') || 'MEDIUM').toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW',
+      title: extractField(block, 'title') || 'Finding',
+      issue: extractField(block, 'issue') || '',
+      quote: extractField(block, 'quote') || '',
+      explanation: extractField(block, 'explanation') || '',
+      suggestion: extractField(block, 'suggestion') || '',
+    });
+  }
+
+  // Missing protections
+  const missingSection = text.match(/---MISSING---\s*([\s\S]*?)(?=---SUMMARY---|$)/);
+  const missing = missingSection
+    ? missingSection[1].split('\n').map(l => l.replace(/^[-•*\d.]\s*/, '').trim()).filter(l => l.length > 10)
+    : [];
+
+  // Summary bullets
+  const summarySection = text.match(/---SUMMARY---\s*([\s\S]*?)$/);
+  const summary = summarySection
+    ? summarySection[1].split('\n').map(l => l.replace(/^[•*]\s*/, '').trim()).filter(l => l.length > 5)
+    : [];
+
+  return { riskScore, riskVerdict, findings, missing, summary };
+}
+
+// Full structured analysis — returns AnalysisResult (used by /api/ai/analyze)
+export async function analyzeContractFull(
+  contractText: string,
+  userCountry: string = 'United States'
+): Promise<AnalysisResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
+
+  const systemPrompt = `You are Signova Intelligence — an expert contract risk analyst protecting everyday people.
+
+User Profile:
+- Primary Jurisdiction: ${userCountry}
+- Preferred Language: English
+
+Your principles:
+1. ALWAYS take the perspective of the user (the one uploading this contract)
+2. Write in plain language — explain to a smart friend, not a judge
+3. Be specific — quote exact clause text when flagging issues
+4. Be honest — if a clause is standard, say "This is standard practice"
+5. Prioritize real risks over theoretical ones`;
+
+  const userPrompt = `Analyze the following contract. Return in EXACTLY this structure — do not deviate:
+
+---RISK_SCORE---
+{{number 0-100}}
+{{one-line verdict}}
+
+---FINDINGS---
+For each risk (ordered by severity):
+
+FINDING_START
+category: {{Termination|Liability|Payment|IP|Confidentiality|Other}}
+severity: {{HIGH|MEDIUM|LOW}}
+title: {{short descriptive name}}
+issue: {{what's problematic, one sentence}}
+quote: {{exact text from contract, max 60 words}}
+explanation: {{why this matters, 2-3 sentences}}
+suggestion: {{rewritten clause suggestion for HIGH/MEDIUM risks}}
+FINDING_END
+
+---MISSING---
+List standard protections that are absent (one per line, starting with -).
+
+---SUMMARY---
+• {{Most important thing to know}}
+• {{Second most important}}
+• {{Action item if any}}
+
+Contract:
+${contractText}`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`AI analysis failed: ${response.status} — ${errText.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  const rawText: string = data.content?.[0]?.text || '';
+  return parseAnalysisResult(rawText);
+}
+
 // Simple analysis - Using Haiku 4.5 (fast, cheap, suitable for basic inquiries)
 export async function analyzeContractSimple(contractText: string, focusArea: string) {
   const prompt = `Instruction:

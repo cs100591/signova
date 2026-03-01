@@ -1,58 +1,62 @@
 import { NextResponse } from 'next/server';
-import { analyzeContract, analyzeContractSimple } from '@/lib/ai';
+import { analyzeContractFull } from '@/lib/ai';
 
 export async function POST(request: Request) {
   try {
-    const { contractText, focusArea, analysisDepth = 'deep', userCountry = 'United States' } = await request.json();
-    
-    if (!contractText) {
+    const body = await request.json();
+    const { contractText, userCountry = 'United States' } = body;
+
+    if (!contractText || contractText.trim().length < 20) {
       return NextResponse.json(
-        { error: 'Missing required fields: contractText is required' },
+        { error: 'contractText is required and must be at least 20 characters' },
         { status: 400 }
       );
     }
-    
-    // Check if API key is configured
+
     if (!process.env.ANTHROPIC_API_KEY) {
-      // Return mock analysis for demo
+      // Return realistic mock for demo / testing without key
       return NextResponse.json({
-        analysis: `## Analysis of ${focusArea} Clause
-
-**What clause says:**
-The clause requires 90 days' notice for termination.
-
-**Why it matters:**
-Longer notice periods reduce operational flexibility and may incur unnecessary costs if you need to switch vendors quickly.
-
-**What is typical:**
-Most SaaS contracts use 30 days' notice. Some enterprise agreements use 60 days, but 90 days is unusually long.
-
-**Suggested improvement:**
-~~ninety (90) days~~ → **thirty (30) days**
-
-This aligns with industry standards while still providing reasonable transition time.`,
+        riskScore: 62,
+        riskVerdict: 'Moderate risk — several clauses need attention before signing',
+        findings: [
+          {
+            category: 'Termination',
+            severity: 'HIGH',
+            title: 'No-cause termination with 90-day notice',
+            issue: 'The other party can terminate this agreement without any reason as long as they give 90 days notice.',
+            quote: 'Either party may terminate this Agreement for any reason upon ninety (90) days written notice.',
+            explanation: 'This gives the counterparty wide latitude to end your engagement without fault. 90 days is longer than standard, locking you in even if circumstances change.',
+            suggestion: 'Reduce notice period to 30 days and add mutual termination rights with compensation for work in progress.',
+          },
+          {
+            category: 'Liability',
+            severity: 'MEDIUM',
+            title: 'Uncapped liability exposure',
+            issue: 'There is no limit on your total financial liability under this contract.',
+            quote: 'Party B shall be liable for all damages arising from breach of this Agreement.',
+            explanation: 'Without a liability cap, you could owe unlimited damages even for minor mistakes. Most standard contracts cap liability at the contract value or 12 months of fees.',
+            suggestion: 'Add: "In no event shall either party's total liability exceed the fees paid in the 12 months preceding the claim."',
+          },
+        ],
+        missing: [
+          'Intellectual property ownership clause (who owns the work product?)',
+          'Dispute resolution / arbitration clause',
+          'Force majeure protection',
+        ],
+        summary: [
+          'The termination clause heavily favors the other party — negotiate for 30-day mutual notice.',
+          'No liability cap puts you at significant financial risk — add one before signing.',
+          'Consider having a lawyer review the IP ownership section before signing.',
+        ],
       });
     }
-    
-    let analysis;
-    
-    // Select model based on analysisDepth
-    if (analysisDepth === 'simple') {
-      // Simple analysis - Using Haiku 4.5 (fast, cheap)
-      analysis = await analyzeContractSimple(contractText, focusArea);
-    } else {
-      // Deep analysis - Using Sonnet 4.6 (high quality)
-      analysis = await analyzeContract(contractText, focusArea);
-    }
 
-    return NextResponse.json({ 
-      analysis,
-      model: analysisDepth === 'simple' ? 'haiku-4.5' : 'sonnet-4.6'
-    });
-  } catch (error) {
-    console.error('AI analysis error:', error);
+    const result = await analyzeContractFull(contractText, userCountry);
+    return NextResponse.json(result);
+  } catch (error: any) {
+    console.error('[AI Analyze] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to analyze contract' },
+      { error: 'Failed to analyze contract', details: error.message },
       { status: 500 }
     );
   }

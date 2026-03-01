@@ -127,6 +127,7 @@ export async function POST(request: Request) {
       fileName: file.name,
       fileUrl: fileUrl,
       metadata: metadata,
+      extractedText: extractedText,
       extractedLength: extractedText.length,
       isScanned: isScanned,
       ocrStatus: ocrStatus,

@@ -4,14 +4,10 @@ import { createSupabaseServerClient } from '@/lib/supabase';
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
-    
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { data, error } = await supabase
@@ -21,151 +17,152 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Database error:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch contracts', details: error.message },
-        { status: 500 }
-      );
+      console.error('[Contracts GET] DB error:', error);
+      return NextResponse.json({ error: 'Failed to fetch contracts', details: error.message }, { status: 500 });
     }
 
     return NextResponse.json(data || []);
   } catch (error: any) {
-    console.error('Server error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
-      { status: 500 }
-    );
+    console.error('[Contracts GET] Server error:', error);
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
-    
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json();
-    const { 
-      workspace_id, 
-      name, 
-      type, 
-      amount, 
-      currency,
-      effective_date, 
-      expiry_date, 
-      summary, 
-      file_url,
-      party_a,
-      party_b
-    } = body;
-    
-    // Validate required fields
+    const { name, type, amount, currency, effective_date, expiry_date, summary, file_url, party_a, party_b, governing_law, workspace_id } = body;
+
     if (!type) {
-      return NextResponse.json(
-        { error: 'Missing required field: type is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required field: type' }, { status: 400 });
     }
-    
-    // Build insert object with only columns that definitely exist
-    // This is a workaround for missing 'name' column in database
-    const insertData: Record<string, any> = {
+
+    const contractName = name || 'Untitled Contract';
+    const contractSummary = summary || '';
+
+    // ── Attempt 1: Full insert (all columns) ───────────────────────────────
+    const fullInsert: Record<string, any> = {
       user_id: user.id,
+      // support both 'title' (original schema) and 'name' (migration adds this)
+      title: contractName,
+      name: contractName,
       type,
+      summary: contractSummary,
+      status: 'active',
       effective_date: effective_date || null,
       expiry_date: expiry_date || null,
-      summary: summary ? `${summary}\n\nContract: ${name || 'Untitled'}` : `Contract: ${name || 'Untitled'}`,
       file_url: file_url || null,
-      status: 'active',
-    };
-
-    // Only add name if it might exist (try-catch to handle gracefully)
-    let insertObj: Record<string, any> = {
-      ...insertData,
-      name: name || 'Untitled Contract',
       workspace_id: workspace_id || null,
-      amount: amount || null,
       currency: currency || 'USD',
       party_a: party_a || null,
       party_b: party_b || null,
+      governing_law: governing_law || null,
     };
+
+    // Parse amount safely
+    if (amount !== undefined && amount !== null && amount !== '') {
+      const cleaned = String(amount).replace(/[^\d.]/g, '');
+      const parsed = cleaned ? parseFloat(cleaned) : null;
+      if (parsed !== null && !isNaN(parsed)) {
+        fullInsert.amount = parsed;
+        fullInsert.contract_value = parsed; // schema uses contract_value
+      }
+    }
 
     let { data, error } = await supabase
       .from('contracts')
-      .insert(insertObj)
+      .insert(fullInsert)
       .select()
       .single();
 
-    // If fails due to missing columns, retry without problematic columns
-    if (error && (error.message.includes('column') || error.code === '42703' || error.code === '23502')) {
-      console.warn('[Contracts POST] Some columns missing, retrying without them:', error.message);
-      // Minimal insert without potentially missing columns
-      const minimalInsertData: Record<string, any> = {
+    // ── Attempt 2: Drop columns that commonly don't exist ─────────────────
+    if (error && (error.code === '42703' || error.code === '23502' || (error.message || '').includes('column'))) {
+      console.warn('[Contracts POST] Full insert failed, retrying without optional columns:', error.message);
+
+      // Figure out which column caused the error and remove it
+      const errMsg = error.message.toLowerCase();
+      const attempt2: Record<string, any> = {
         user_id: user.id,
         type,
+        summary: contractSummary,
         effective_date: effective_date || null,
         expiry_date: expiry_date || null,
-        summary: summary ? `${summary}\n\nContract: ${name || 'Untitled'}` : `Contract: ${name || 'Untitled'}`,
         file_url: file_url || null,
-        status: 'active',
       };
-      // Try adding amount if not the missing column
-      if (!error.message.toLowerCase().includes('amount')) {
-        minimalInsertData.amount = amount || null;
+
+      // Only include columns that are NOT mentioned in the error
+      if (!errMsg.includes('title'))         attempt2.title = contractName;
+      if (!errMsg.includes("'name'") && !errMsg.includes('"name"')) attempt2.name = contractName;
+      if (!errMsg.includes('status'))        attempt2.status = 'active';
+      if (!errMsg.includes('workspace_id'))  attempt2.workspace_id = workspace_id || null;
+      if (!errMsg.includes('currency'))      attempt2.currency = currency || 'USD';
+      if (!errMsg.includes('party_a'))       attempt2.party_a = party_a || null;
+      if (!errMsg.includes('party_b'))       attempt2.party_b = party_b || null;
+      if (!errMsg.includes('governing_law')) attempt2.governing_law = governing_law || null;
+      if (!errMsg.includes('amount') && !errMsg.includes('contract_value')) {
+        if (fullInsert.amount !== undefined) attempt2.amount = fullInsert.amount;
+        if (fullInsert.contract_value !== undefined) attempt2.contract_value = fullInsert.contract_value;
       }
-      if (!error.message.toLowerCase().includes('currency')) {
-        minimalInsertData.currency = currency || 'USD';
-      }
-      
+
       const { data: d2, error: e2 } = await supabase
         .from('contracts')
-        .insert(minimalInsertData)
+        .insert(attempt2)
         .select()
         .single();
       data = d2;
       error = e2;
     }
-    
+
+    // ── Attempt 3: Absolute minimum ───────────────────────────────────────
+    if (error && (error.code === '42703' || error.code === '23502' || (error.message || '').includes('column'))) {
+      console.warn('[Contracts POST] Attempt 2 failed, trying minimal insert:', error.message);
+
+      const minimal: Record<string, any> = {
+        user_id: user.id,
+        type,
+        summary: contractSummary ? `${contractSummary}\n\nContract: ${contractName}` : `Contract: ${contractName}`,
+        effective_date: effective_date || null,
+        expiry_date: expiry_date || null,
+        file_url: file_url || null,
+      };
+
+      const { data: d3, error: e3 } = await supabase
+        .from('contracts')
+        .insert(minimal)
+        .select()
+        .single();
+      data = d3;
+      error = e3;
+    }
+
     if (error) {
-      console.error('Database error:', error);
-      console.error('Error code:', error.code);
-      console.error('Error details:', error.details);
-      console.error('Error hint:', error.hint);
-      
-      // Provide more specific error messages
+      console.error('[Contracts POST] All attempts failed:', error);
       let userMessage = 'Failed to save contract';
       if (error.code === '42703') {
-        userMessage = 'Database error: Missing required columns. Please contact support.';
+        userMessage = 'Database schema mismatch. Please run the SQL migration in Supabase Dashboard.';
       } else if (error.code === '23502') {
-        userMessage = 'Database error: Missing required field. Please fill in all required fields.';
-      } else if (error.message?.includes('column')) {
-        userMessage = `Database error: ${error.message}. Please run database migrations.`;
+        userMessage = 'A required database field is missing a value. Please run the SQL migration.';
+      } else if (error.code === '42501') {
+        userMessage = 'Permission denied. Please check Row Level Security policies in Supabase.';
       }
-      
-      return NextResponse.json(
-        { 
-          error: userMessage, 
-          details: error.message,
-          code: error.code,
-          hint: 'Database columns may be missing. Run SQL migrations in Supabase Dashboard.'
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        error: userMessage,
+        details: error.message,
+        code: error.code,
+        hint: 'Run the SQL migration in Supabase Dashboard → SQL Editor',
+      }, { status: 500 });
     }
-    
+
     return NextResponse.json(data, { status: 201 });
   } catch (error: any) {
-    console.error('Server error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
-      { status: 500 }
-    );
+    console.error('[Contracts POST] Unexpected error:', error);
+    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
   }
 }

@@ -1,35 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, FileText, Plus, Trash2, History, MessageSquare, Upload, ChevronDown, X } from "lucide-react";
-import { supabaseClient } from "@/lib/supabase";
+import { useState, useRef, useEffect } from "react";
+import { Send, FileText, Plus, History, Upload, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  WaitingRobot, 
-  ThinkingRobot 
+import {
+  WaitingRobot,
+  ThinkingRobot,
 } from "@/components/illustrations/RobotIllustrations";
 import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
 import { RiskScoreCard } from "@/components/terminal/RiskScoreCard";
 import { FindingCards } from "@/components/terminal/FindingCards";
 import { MarkdownMessage } from "@/components/terminal/MarkdownMessage";
-
-// Message types
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  type?: "text" | "analysis";
-  analysisResult?: AnalysisResult;
-  timestamp: Date;
-}
-
-interface AnalysisResult {
-  riskScore: number;
-  riskVerdict: string;
-  findings: Finding[];
-  missing: string[];
-  summary: string[];
-}
 
 interface Finding {
   category: string;
@@ -41,20 +22,21 @@ interface Finding {
   suggestion: string;
 }
 
-interface ChatSession {
-  id: string;
-  title: string;
-  messages: Message[];
-  contractText?: string;
-  createdAt: Date;
+interface AnalysisResult {
+  riskScore: number;
+  riskVerdict: string;
+  findings: Finding[];
+  missing: string[];
+  summary: string[];
 }
 
-interface SavedContract {
+interface Message {
   id: string;
-  name: string;
-  type: string;
-  summary?: string;
-  extracted_text?: string;
+  role: "user" | "assistant";
+  content: string;
+  type?: "text" | "analysis";
+  analysisResult?: AnalysisResult;
+  timestamp: Date;
 }
 
 const QUICK_QUESTIONS = [
@@ -71,116 +53,88 @@ export default function TerminalPage() {
   const [contractName, setContractName] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showContractInput, setShowContractInput] = useState(true);
-  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [savedContracts, setSavedContracts] = useState<SavedContract[]>([]);
-  const [showContractDropdown, setShowContractDropdown] = useState(false);
-  const [loadingContracts, setLoadingContracts] = useState(false);
-  const [inputMode, setInputMode] = useState<"paste" | "saved" | "upload">("paste");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [inputMode, setInputMode] = useState<"paste" | "upload">("paste");
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
-  // Scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isAnalyzing]);
 
-  // Handle sending message
-  const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isAnalyzing) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: text,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInputText("");
-    setShowContractInput(false);
-    setIsAnalyzing(true);
-
-    // Check if this is a contract analysis request
-    if (contractText) {
-      // Start analysis flow
-      await startContractAnalysis();
-    } else {
-      // Regular chat
-      await handleRegularChat(text);
+  // ── Core analysis function ──────────────────────────────────────────────
+  // Accept explicit text so React async state is never stale
+  const startContractAnalysis = async (textToAnalyze: string) => {
+    if (!textToAnalyze || textToAnalyze.trim().length < 20) {
+      setIsAnalyzing(false);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: "Please provide contract text (at least a few sentences) before analyzing.",
+        timestamp: new Date(),
+      }]);
+      return;
     }
-  };
 
-  // Contract analysis flow
-  const startContractAnalysis = async () => {
     const startTime = Date.now();
-    const minAnimationDuration = 3000; // 3 seconds minimum
-    
+    const MIN_ANIMATION_MS = 3000;
+
     try {
       const response = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contractText,
-          userCountry: "United States", // Should come from user profile
+          contractText: textToAnalyze,
+          userCountry: "United States",
         }),
       });
 
-      if (!response.ok) throw new Error("Analysis failed");
+      // Enforce minimum animation duration
+      const elapsed = Date.now() - startTime;
+      if (elapsed < MIN_ANIMATION_MS) {
+        await new Promise(r => setTimeout(r, MIN_ANIMATION_MS - elapsed));
+      }
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${response.status}`);
+      }
 
       const result: AnalysisResult = await response.json();
-      
-      // Ensure animation shows for at least 3 seconds
-      const elapsed = Date.now() - startTime;
-      if (elapsed < minAnimationDuration) {
-        await new Promise(resolve => setTimeout(resolve, minAnimationDuration - elapsed));
-      }
-      
-      // Now set results (this will hide animation and show results)
+
       setAnalysisResult(result);
       setIsAnalyzing(false);
       setAnalysisComplete(true);
-      
-      // Add analysis result as a message
-      const assistantMessage: Message = {
+
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "Analysis complete",
         type: "analysis",
         analysisResult: result,
         timestamp: new Date(),
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Analysis error:", error);
-      
-      // Ensure animation shows for at least 3 seconds even on error
+      }]);
+    } catch (error: any) {
+      console.error("[Terminal] Analysis error:", error);
+
       const elapsed = Date.now() - startTime;
-      if (elapsed < minAnimationDuration) {
-        await new Promise(resolve => setTimeout(resolve, minAnimationDuration - elapsed));
+      if (elapsed < MIN_ANIMATION_MS) {
+        await new Promise(r => setTimeout(r, MIN_ANIMATION_MS - elapsed));
       }
-      
+
       setIsAnalyzing(false);
-      
-      // Add error message
-      const errorMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "Sorry, I encountered an error analyzing the contract. Please try again.",
+        content: `Sorry, analysis failed: ${error.message || "Unknown error"}. Please try again.`,
         timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      }]);
     }
   };
 
-  // Regular chat flow
+  // ── Regular chat (with contract context) ───────────────────────────────
   const handleRegularChat = async (text: string) => {
     try {
       const response = await fetch("/api/terminal/chat", {
@@ -195,103 +149,161 @@ export default function TerminalPage() {
       if (!response.ok) throw new Error("Chat failed");
 
       const data = await response.json();
-      
-      const assistantMessage: Message = {
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.response,
         type: "text",
         timestamp: new Date(),
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error("Chat error:", error);
-      const errorMessage: Message = {
+      }]);
+    } catch (error: any) {
+      console.error("[Terminal] Chat error:", error);
+      setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "Sorry, I encountered an error. Please try again.",
         timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      }]);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Handle file upload
+  // ── Send message handler ────────────────────────────────────────────────
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isAnalyzing) return;
+
+    setMessages(prev => [...prev, {
+      id: Date.now().toString(),
+      role: "user",
+      content: text,
+      timestamp: new Date(),
+    }]);
+    setInputText("");
+    setShowContractInput(false);
+    setIsAnalyzing(true);
+
+    // If we have contract text and haven't analysed yet → run analysis
+    if (contractText && !analysisComplete) {
+      await startContractAnalysis(contractText);
+    } else {
+      // Follow-up question or general chat
+      await handleRegularChat(text);
+    }
+  };
+
+  // ── PDF / file upload ───────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-      // Handle PDF upload
-      const formData = new FormData();
-      formData.append("file", file);
+    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isTxt = file.type.startsWith("text/") || file.name.endsWith(".txt");
 
-      try {
-        setIsAnalyzing(true);
-        const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
-        
-        if (data.success && data.metadata) {
-          setContractText(data.extractedText || JSON.stringify(data.metadata, null, 2));
-          setContractName(file.name);
-          setInputMode("upload");
-          setShowContractInput(false);
-          
-          // Start analysis
-          await startContractAnalysis();
-        } else {
-          alert(data.details || "Could not extract text from PDF.");
-        }
-      } catch (err) {
-        alert("Failed to process PDF.");
-      } finally {
-        setIsAnalyzing(false);
-      }
-    } else if (file.type.startsWith("text/") || file.name.endsWith(".txt")) {
+    if (isTxt) {
+      // Plain text — just load it, no upload needed
       const text = await file.text();
       setContractText(text);
       setContractName(file.name);
       setInputMode("upload");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (!isPdf) {
+      alert("Please upload a PDF or text file.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // PDF — immediately switch to chat + start animation
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: `Analyze this contract: ${file.name}`,
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, userMsg]);
+    setShowContractInput(false);
+    setIsAnalyzing(true);
+    setContractName(file.name);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.details || data.error || "Could not extract text from PDF.");
+      }
+
+      const extractedText: string = data.extractedText || "";
+      if (!extractedText || extractedText.trim().length < 20) {
+        throw new Error("No readable text found in this PDF.");
+      }
+
+      setContractText(extractedText);
+
+      // Pass text directly — avoids React async state staleness
+      await startContractAnalysis(extractedText);
+    } catch (err: any) {
+      console.error("[Terminal] PDF upload error:", err);
+      setIsAnalyzing(false);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: `Sorry, I couldn't process this PDF: ${err.message}`,
+        timestamp: new Date(),
+      }]);
     }
 
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Render analysis state with new components
+  // ── Reset / new chat ────────────────────────────────────────────────────
+  const handleNewChat = () => {
+    setMessages([]);
+    setContractText("");
+    setContractName("");
+    setShowContractInput(true);
+    setAnalysisComplete(false);
+    setAnalysisResult(null);
+    setIsAnalyzing(false);
+  };
+
+  // ── Analysis animation + results ────────────────────────────────────────
   const renderAnalysisState = () => {
     if (!isAnalyzing && !analysisComplete) return null;
 
     return (
-      <div className="max-w-2xl mx-auto space-y-6 py-8">
-        {/* Step 1: Terminal Animation */}
+      <div className="max-w-2xl mx-auto space-y-6 py-4">
+        {/* Thinking animation */}
         <AnimatePresence>
-          {isAnalyzing && !analysisComplete && (
+          {isAnalyzing && (
             <motion.div
+              key="thinking"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0, y: -20 }}
               className="flex flex-col items-center"
             >
-              <ThinkingRobot size={180} className="mb-6" />
-              <AnalysisTerminal 
-                isActive={true} 
-                onComplete={() => {}} 
-              />
+              <ThinkingRobot size={160} className="mb-4" />
+              <AnalysisTerminal isActive={true} onComplete={() => {}} />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Step 2: Risk Score Card */}
+        {/* Risk score */}
         <AnimatePresence>
           {analysisComplete && analysisResult && (
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
+              key="risk"
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <RiskScoreCard 
+              <RiskScoreCard
                 score={analysisResult.riskScore}
                 verdict={analysisResult.riskVerdict}
                 isVisible={true}
@@ -300,45 +312,60 @@ export default function TerminalPage() {
           )}
         </AnimatePresence>
 
-        {/* Step 3: Finding Cards */}
+        {/* Finding cards */}
         <AnimatePresence>
           {analysisComplete && analysisResult && (
             <motion.div
+              key="findings"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.4 }}
             >
-              <FindingCards 
-                findings={analysisResult.findings}
-                isVisible={true}
-              />
+              <FindingCards findings={analysisResult.findings} isVisible={true} />
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Step 4: Key Takeaways */}
-        <AnimatePresence>
-          {analysisComplete && analysisResult && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1 }}
-              className="bg-white border border-[#e0d9ce] rounded-xl p-5"
-            >
-              <h3 className="text-sm font-medium text-[#1a1714] mb-3">
-                Key Takeaways
-              </h3>
-              <ul className="space-y-2">
-                {analysisResult.summary.map((point, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm text-[#3a3530]">
-                    <span className="text-[#c8873a] mt-0.5">•</span>
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Key takeaways */}
+        {analysisComplete && analysisResult && analysisResult.summary.length > 0 && (
+          <motion.div
+            key="summary"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8 }}
+            className="bg-white border border-[#e0d9ce] rounded-xl p-5"
+          >
+            <h3 className="text-sm font-semibold text-[#1a1714] mb-3">Key Takeaways</h3>
+            <ul className="space-y-2">
+              {analysisResult.summary.map((point, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-[#3a3530]">
+                  <span className="text-[#c8873a] mt-0.5">•</span>
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
+
+        {/* Missing protections */}
+        {analysisComplete && analysisResult && analysisResult.missing.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1 }}
+            className="bg-[#FFF8F0] border border-[#F59E0B]/30 rounded-xl p-5"
+          >
+            <h3 className="text-sm font-semibold text-[#92400e] mb-3">Missing Protections</h3>
+            <ul className="space-y-1.5">
+              {analysisResult.missing.map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-[#78350f]">
+                  <span className="mt-0.5">⚠️</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
 
         {/* Disclaimer */}
         {analysisComplete && (
@@ -346,7 +373,7 @@ export default function TerminalPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.2 }}
-            className="text-center text-xs text-[#9a8f82] pt-4"
+            className="text-center text-xs text-[#9a8f82] pt-2 pb-4"
           >
             ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
           </motion.p>
@@ -355,53 +382,34 @@ export default function TerminalPage() {
     );
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full bg-[#F8F7F4]">
-      {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
+
         {/* Header */}
         <div className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h1 className="text-xl font-semibold text-[#1A1A1A]">
-              AI Legal Assistant
-            </h1>
+            <h1 className="text-xl font-semibold text-[#1A1A1A]">AI Legal Assistant</h1>
             <p className="text-sm text-[#6B7280]">
-              {contractText
-                ? `Analyzing: ${contractName || "contract"}`
-                : "Ask legal questions or load a contract for analysis"}
+              {contractName
+                ? `Analyzing: ${contractName}`
+                : "Ask legal questions or upload a contract for analysis"}
             </p>
           </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#F3F4F6] rounded-lg transition-colors"
-            >
-              <History className="w-4 h-4" />
-              History
-            </button>
-
-            <button
-              onClick={() => {
-                setMessages([]);
-                setContractText("");
-                setContractName("");
-                setShowContractInput(true);
-                setAnalysisComplete(false);
-                setAnalysisResult(null);
-              }}
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              New Chat
-            </button>
-          </div>
+          <button
+            onClick={handleNewChat}
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Chat
+          </button>
         </div>
 
-        {/* Contract Input */}
+        {/* ── Contract Input (shown until user enters chat) ── */}
         {showContractInput && (
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto space-y-8">
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center">
@@ -409,57 +417,48 @@ export default function TerminalPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-[#1A1A1A]">Load a Contract</h3>
-                    <p className="text-sm text-[#6B7280]">
-                      Upload a PDF or paste contract text
-                    </p>
+                    <p className="text-sm text-[#6B7280]">Upload a PDF or paste contract text to get started</p>
                   </div>
                 </div>
 
                 {/* Input Mode Tabs */}
                 <div className="flex gap-2 mb-5">
-                  {[
-                    { id: "paste", label: "Paste Text" },
-                    { id: "upload", label: "Upload PDF" },
-                  ].map((mode) => (
+                  {(["paste", "upload"] as const).map(mode => (
                     <button
-                      key={mode.id}
-                      onClick={() => setInputMode(mode.id as any)}
+                      key={mode}
+                      onClick={() => setInputMode(mode)}
                       className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
-                        inputMode === mode.id
+                        inputMode === mode
                           ? "bg-[#1A1A1A] text-white"
                           : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
                       }`}
                     >
-                      {mode.label}
+                      {mode === "paste" ? "Paste Text" : "Upload PDF"}
                     </button>
                   ))}
                 </div>
 
-                {/* Paste Text Mode */}
+                {/* Paste Text */}
                 {inputMode === "paste" && (
                   <textarea
                     value={contractText}
-                    onChange={(e) => setContractText(e.target.value)}
+                    onChange={e => setContractText(e.target.value)}
                     placeholder="Paste your contract text here..."
                     rows={10}
                     className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none"
                   />
                 )}
 
-                {/* Upload Mode */}
+                {/* Upload */}
                 {inputMode === "upload" && (
                   <div>
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-[#E5E7EB] rounded-xl p-8 text-center cursor-pointer hover:border-[#F59E0B] hover:bg-[#FEF3C7]/20 transition-all"
+                      className="border-2 border-dashed border-[#E5E7EB] rounded-xl p-10 text-center cursor-pointer hover:border-[#F59E0B] hover:bg-[#FEF3C7]/20 transition-all"
                     >
                       <Upload className="w-8 h-8 mx-auto mb-3 text-[#9CA3AF]" />
-                      <p className="font-medium text-[#374151]">
-                        Click to upload a PDF
-                      </p>
-                      <p className="text-sm text-[#9CA3AF] mt-1">
-                        Supports PDF files
-                      </p>
+                      <p className="font-medium text-[#374151]">Click to upload a PDF</p>
+                      <p className="text-sm text-[#9CA3AF] mt-1">Supports PDF files — analysis starts immediately</p>
                     </div>
                     <input
                       ref={fileInputRef}
@@ -471,7 +470,7 @@ export default function TerminalPage() {
                   </div>
                 )}
 
-                {/* Action Buttons */}
+                {/* Action row */}
                 <div className="flex items-center justify-between mt-5">
                   <button
                     onClick={() => setShowContractInput(false)}
@@ -480,23 +479,22 @@ export default function TerminalPage() {
                     Skip & ask general questions →
                   </button>
 
-                  {contractText.trim() && (
+                  {contractText.trim() && inputMode === "paste" && (
                     <button
                       onClick={() => handleSendMessage("Please analyze this contract")}
                       disabled={isAnalyzing}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 transition-colors"
                     >
-                      <MessageSquare className="w-4 h-4" />
                       Analyze Contract
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Empty State with Robot */}
+              {/* Empty state robot */}
               {!contractText && (
-                <div className="mt-12 flex flex-col items-center">
-                  <WaitingRobot size={160} />
+                <div className="flex flex-col items-center pt-4">
+                  <WaitingRobot size={150} />
                   <h3 className="text-lg font-semibold text-[#1a1714] mt-4 mb-2">
                     AI Contract Analysis
                   </h3>
@@ -509,62 +507,47 @@ export default function TerminalPage() {
           </div>
         )}
 
-        {/* Chat/Analysis Interface */}
+        {/* ── Chat Interface ── */}
         {!showContractInput && (
           <>
             <div className="flex-1 overflow-y-auto p-6 min-h-0">
               {messages.length === 0 && !isAnalyzing && !analysisComplete ? (
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
                   <WaitingRobot size={120} />
-                  <h3 className="text-lg font-medium text-[#1A1A1A] mt-4 mb-2">
-                    How can I help you today?
-                  </h3>
+                  <h3 className="text-lg font-medium text-[#1A1A1A] mt-4 mb-2">How can I help you today?</h3>
                   <p className="text-sm text-[#6B7280]">
-                    {contractText
-                      ? "Ask me anything about your contract"
-                      : "Ask legal questions or load a contract"}
+                    {contractText ? "Ask me anything about your contract" : "Ask legal questions or load a contract"}
                   </p>
                 </div>
               ) : (
-                <div className="max-w-3xl mx-auto space-y-6">
-                  {/* Messages */}
-                  {messages.map((message) => (
+                <div className="max-w-3xl mx-auto space-y-4">
+                  {/* Message list */}
+                  {messages.map(message => (
                     <div
                       key={message.id}
-                      className={`flex ${
-                        message.role === "user" ? "justify-end" : "justify-start"
-                      }`}
+                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                          message.role === "user"
-                            ? "bg-[#1A1A1A] text-white"
-                            : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
-                        }`}
-                      >
-                        {message.type === "analysis" ? (
-                          // Analysis results are rendered separately below
-                          <div className="text-sm">Analysis complete ✓</div>
-                        ) : (
-                          <MarkdownMessage content={message.content} isUser={message.role === "user"} />
-                        )}
+                      {message.type !== "analysis" && (
                         <div
-                          className={`text-xs mt-2 ${
+                          className={`max-w-[80%] px-4 py-3 rounded-2xl ${
                             message.role === "user"
-                              ? "text-gray-400"
-                              : "text-[#9CA3AF]"
+                              ? "bg-[#1A1A1A] text-white"
+                              : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
                           }`}
                         >
-                          {message.timestamp.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          <MarkdownMessage
+                            content={message.content}
+                            isUser={message.role === "user"}
+                          />
+                          <div className={`text-xs mt-2 ${message.role === "user" ? "text-gray-400" : "text-[#9CA3AF]"}`}>
+                            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
 
-                  {/* Analysis State */}
+                  {/* Analysis animation + results */}
                   {renderAnalysisState()}
 
                   <div ref={messagesEndRef} />
@@ -572,13 +555,14 @@ export default function TerminalPage() {
               )}
             </div>
 
-            {/* Input Area */}
+            {/* Input area */}
             <div className="border-t border-[#E5E7EB] bg-white p-4 flex-shrink-0">
-              {contractText && (
+              {/* Contract loaded indicator */}
+              {contractName && (
                 <div className="max-w-3xl mx-auto mb-3 px-3 py-2 bg-[#FEF3C7]/50 rounded-lg flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-[#B45309]">
                     <FileText className="w-4 h-4" />
-                    {contractName || "Contract text"} loaded
+                    {contractName} loaded
                   </div>
                   <button
                     onClick={() => { setContractText(""); setContractName(""); }}
@@ -590,15 +574,14 @@ export default function TerminalPage() {
                 </div>
               )}
 
-              {/* Quick Questions */}
-              {contractText && messages.length > 0 && !isAnalyzing && (
+              {/* Quick question chips — only after analysis */}
+              {contractText && analysisComplete && !isAnalyzing && (
                 <div className="max-w-3xl mx-auto mb-3 flex flex-wrap gap-2">
-                  {QUICK_QUESTIONS.map((q, idx) => (
+                  {QUICK_QUESTIONS.map((q, i) => (
                     <button
-                      key={idx}
+                      key={i}
                       onClick={() => handleSendMessage(q)}
-                      disabled={isAnalyzing}
-                      className="px-3 py-1.5 text-xs bg-[#F9FAFB] border border-[#E5E7EB] rounded-full hover:border-[#F59E0B] hover:bg-[#FEF3C7]/30 transition-all text-[#374151] disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs bg-[#F9FAFB] border border-[#E5E7EB] rounded-full hover:border-[#F59E0B] hover:bg-[#FEF3C7]/30 transition-all text-[#374151]"
                     >
                       {q}
                     </button>
@@ -606,24 +589,23 @@ export default function TerminalPage() {
                 </div>
               )}
 
+              {/* Text input */}
               <div className="max-w-3xl mx-auto flex items-end gap-3">
                 <textarea
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={(e) => {
+                  onChange={e => setInputText(e.target.value)}
+                  onKeyDown={e => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       handleSendMessage(inputText);
                     }
                   }}
-                  placeholder={
-                    contractText ? "Ask about this contract..." : "Ask a legal question..."
-                  }
+                  placeholder={contractText ? "Ask about this contract..." : "Ask a legal question..."}
                   rows={1}
-                  className="flex-1 px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32"
+                  disabled={isAnalyzing}
+                  className="flex-1 px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32 disabled:opacity-50"
                   style={{ minHeight: "48px" }}
                 />
-
                 <button
                   onClick={() => handleSendMessage(inputText)}
                   disabled={!inputText.trim() || isAnalyzing}
@@ -632,7 +614,6 @@ export default function TerminalPage() {
                   <Send className="w-5 h-5" />
                 </button>
               </div>
-
               <p className="text-xs text-[#9CA3AF] text-center mt-2">
                 Press Enter to send · Shift+Enter for new line
               </p>
