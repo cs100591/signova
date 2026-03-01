@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { analyzeContractFull } from '@/lib/ai';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { contractText, userCountry = 'United States' } = body;
 
@@ -11,6 +19,30 @@ export async function POST(request: Request) {
         { error: 'contractText is required and must be at least 20 characters' },
         { status: 400 }
       );
+    }
+
+    // Increment usage counter BEFORE running analysis
+    // This ensures we track even if analysis fails
+    try {
+      // First get current count
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('analyses_used')
+        .eq('id', user.id)
+        .single();
+      
+      const currentCount = profile?.analyses_used || 0;
+      
+      // Increment
+      await supabase
+        .from('profiles')
+        .update({ analyses_used: currentCount + 1 })
+        .eq('id', user.id);
+      
+      console.log(`[AI Analyze] Usage incremented: ${currentCount} → ${currentCount + 1}`);
+    } catch (usageError) {
+      console.error('[AI Analyze] Failed to increment usage:', usageError);
+      // Don't fail the analysis if usage tracking fails
     }
 
     if (!process.env.ANTHROPIC_API_KEY) {

@@ -384,7 +384,7 @@ export default function ConfirmPage() {
               Cancel
             </Button>
             <Button
-              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium"
+              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium transition-all duration-200 ease-in-out disabled:opacity-70"
               onClick={handleSave}
               disabled={saving}
             >

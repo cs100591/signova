@@ -111,10 +111,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
     }
 
-    // Create workspace (owner_id/plan columns added after migrations run)
+    // Create workspace with owner_id for RLS policy
     const { data: workspace, error: createError } = await supabase
       .from("workspaces")
-      .insert({ name: name.trim() })
+      .insert({ 
+        name: name.trim(),
+        owner_id: user.id  // Required by RLS policy
+      })
       .select()
       .single();
 
