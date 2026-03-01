@@ -273,114 +273,81 @@ export default function TerminalPage() {
     setIsAnalyzing(false);
   };
 
-  // ── Analysis animation + results ────────────────────────────────────────
-  const renderAnalysisState = () => {
-    if (!isAnalyzing && !analysisComplete) return null;
+  // ── Analysis result cards component ─────────────────────────────────────
+  const AnalysisResultCards = ({ result }: { result: AnalysisResult }) => (
+    <div className="w-full space-y-4">
+      {/* Risk Score */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <RiskScoreCard
+          score={result.riskScore}
+          verdict={result.riskVerdict}
+          isVisible={true}
+        />
+      </motion.div>
 
-    return (
-      <div className="max-w-2xl mx-auto space-y-6 py-4">
-        {/* Thinking animation */}
-        <AnimatePresence>
-          {isAnalyzing && (
-            <motion.div
-              key="thinking"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center"
-            >
-              <ThinkingRobot size={160} className="mb-4" />
-              <AnalysisTerminal isActive={true} onComplete={() => {}} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Finding Cards */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <FindingCards findings={result.findings} isVisible={true} />
+      </motion.div>
 
-        {/* Risk score */}
-        <AnimatePresence>
-          {analysisComplete && analysisResult && (
-            <motion.div
-              key="risk"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <RiskScoreCard
-                score={analysisResult.riskScore}
-                verdict={analysisResult.riskVerdict}
-                isVisible={true}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Key Takeaways */}
+      {result.summary.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white border border-[#e0d9ce] rounded-xl p-5"
+        >
+          <h3 className="text-sm font-semibold text-[#1a1714] mb-3">Key Takeaways</h3>
+          <ul className="space-y-2">
+            {result.summary.map((point, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#3a3530]">
+                <span className="text-[#c8873a] mt-0.5">•</span>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
 
-        {/* Finding cards */}
-        <AnimatePresence>
-          {analysisComplete && analysisResult && (
-            <motion.div
-              key="findings"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              <FindingCards findings={analysisResult.findings} isVisible={true} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Missing Protections */}
+      {result.missing.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-[#FFF8F0] border border-[#F59E0B]/30 rounded-xl p-5"
+        >
+          <h3 className="text-sm font-semibold text-[#92400e] mb-3">Missing Protections</h3>
+          <ul className="space-y-1.5">
+            {result.missing.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#78350f]">
+                <span className="mt-0.5">⚠️</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
 
-        {/* Key takeaways */}
-        {analysisComplete && analysisResult && analysisResult.summary.length > 0 && (
-          <motion.div
-            key="summary"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="bg-white border border-[#e0d9ce] rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold text-[#1a1714] mb-3">Key Takeaways</h3>
-            <ul className="space-y-2">
-              {analysisResult.summary.map((point, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-[#3a3530]">
-                  <span className="text-[#c8873a] mt-0.5">•</span>
-                  {point}
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        )}
-
-        {/* Missing protections */}
-        {analysisComplete && analysisResult && analysisResult.missing.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1 }}
-            className="bg-[#FFF8F0] border border-[#F59E0B]/30 rounded-xl p-5"
-          >
-            <h3 className="text-sm font-semibold text-[#92400e] mb-3">Missing Protections</h3>
-            <ul className="space-y-1.5">
-              {analysisResult.missing.map((item, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-[#78350f]">
-                  <span className="mt-0.5">⚠️</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        )}
-
-        {/* Disclaimer */}
-        {analysisComplete && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.2 }}
-            className="text-center text-xs text-[#9a8f82] pt-2 pb-4"
-          >
-            ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
-          </motion.p>
-        )}
-      </div>
-    );
-  };
+      {/* Disclaimer */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="text-center text-xs text-[#9a8f82] pt-2"
+      >
+        ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
+      </motion.p>
+    </div>
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -522,12 +489,18 @@ export default function TerminalPage() {
               ) : (
                 <div className="max-w-3xl mx-auto space-y-4">
                   {/* Message list */}
-                  {messages.map(message => (
+                  {messages.map((message, index) => (
                     <div
                       key={message.id}
                       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      {message.type !== "analysis" && (
+                      {message.type === "analysis" && message.analysisResult ? (
+                        // Analysis result cards - render inline at correct position
+                        <div className="w-full max-w-2xl">
+                          <AnalysisResultCards result={message.analysisResult} />
+                        </div>
+                      ) : (
+                        // Regular text message
                         <div
                           className={`max-w-[80%] px-4 py-3 rounded-2xl ${
                             message.role === "user"
@@ -547,8 +520,13 @@ export default function TerminalPage() {
                     </div>
                   ))}
 
-                  {/* Analysis animation + results */}
-                  {renderAnalysisState()}
+                  {/* Thinking animation (only during analysis) */}
+                  {isAnalyzing && (
+                    <div className="flex flex-col items-center py-8">
+                      <ThinkingRobot size={160} className="mb-4" />
+                      <AnalysisTerminal isActive={true} onComplete={() => {}} />
+                    </div>
+                  )}
 
                   <div ref={messagesEndRef} />
                 </div>
