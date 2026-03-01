@@ -1,463 +1,499 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
-import { 
-  Check, 
-  Bot, 
-  AlertCircle, 
-  ArrowUp, 
-  Shield, 
-  Upload, 
-  FileText, 
-  ChevronDown,
-  Copy,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle
-} from "lucide-react";
-import TerminalAnimation from "@/components/animations/TerminalAnimation";
-import { ResultsView } from "@/components/animations/ResultsAnimation";
-import { RobotWaiting, RobotComplete, RobotFoundRisk, RobotAllClear } from "@/components/illustrations";
-import { IconMSA, IconRenewal, IconNDA } from "@/components/illustrations";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Send, Loader2, FileText, Plus, Trash2, History, MessageSquare } from "lucide-react";
 
-// Mock contracts data
-const contracts = [
-  { id: 1, name: "Acme Corp MSA", type: "Service Agreement", Icon: IconMSA },
-  { id: 2, name: "Dunder Mifflin Renewal", type: "Renewal", Icon: IconRenewal },
-  { id: 3, name: "Stark Industries NDA", type: "NDA", Icon: IconNDA },
-];
-
-// Quick questions for the terminal
-const quickQuestions = [
-  "What clauses are risky for me?",
-  "Is this contract standard?",
-  "How can I negotiate this?",
-  "What's missing from this contract?",
-];
-
-interface AnalysisResult {
-  analysis?: string;
-  riskScore?: number;
-  riskVerdict?: string;
-  findings?: any[];
-  missing?: string[];
-  summary?: string[];
-  model?: string;
-  _parsed?: boolean;
-}
-
-interface ChatMessage {
+interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
-  type?: 'analysis' | 'text';
-  analysisData?: AnalysisResult;
+  timestamp: Date;
 }
+
+interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  contractText?: string;
+  createdAt: Date;
+}
+
+const QUICK_QUESTIONS = [
+  "What should I look for in an NDA?",
+  "Is this termination clause fair?",
+  "Explain liability clauses",
+  "What are standard payment terms?",
+  "How do I negotiate an MSA?",
+  "What is governing law?",
+  "Explain IP ownership clauses",
+  "What should a service agreement include?",
+];
 
 export default function TerminalPage() {
-  const [selectedContract, setSelectedContract] = useState<(typeof contracts)[0] | null>(null);
-  const [selectedFocus, setSelectedFocus] = useState("Liability");
-  const [showContractSelector, setShowContractSelector] = useState(false);
+  const router = useRouter();
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [contractText, setContractText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputValue, setInputValue] = useState("");
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const [showContractInput, setShowContractInput] = useState(true);
+  const [chatHistory, setChatHistory] = useState<ChatSession[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const focusAreas = [
-    { name: "Termination", riskCount: 1 },
-    { name: "Liability", riskCount: 2 },
-    { name: "Payment", riskCount: 0 },
-    { name: "IP", riskCount: 1 },
-    { name: "Confidentiality", riskCount: 0 },
-    { name: "Other", riskCount: 0 },
-  ];
-
-  // Auto-scroll to bottom
+  // Load chat history from localStorage
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [isAnalyzing, analysisResult]);
+    const saved = localStorage.getItem("terminalChatHistory");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setChatHistory(parsed.map((chat: any) => ({
+          ...chat,
+          createdAt: new Date(chat.createdAt),
+          messages: chat.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp),
+          })),
+        })));
+      } catch (e) {
+        console.error("Failed to load chat history:", e);
+      }
+    }
+  }, []);
 
-  const startAnalysis = async () => {
-    setIsAnalyzing(true);
-    setAnalysisError(null);
+  // Save chat history
+  const saveChatHistory = (newMessages: Message[], contract?: string) => {
+    if (newMessages.length === 0) return;
     
+    const title = newMessages[0].content.slice(0, 50) + (newMessages[0].content.length > 50 ? "..." : "");
+    const newSession: ChatSession = {
+      id: Date.now().toString(),
+      title,
+      messages: newMessages,
+      contractText: contract,
+      createdAt: new Date(),
+    };
+    
+    const updated = [newSession, ...chatHistory].slice(0, 20); // Keep last 20
+    setChatHistory(updated);
+    localStorage.setItem("terminalChatHistory", JSON.stringify(updated));
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (question: string) => {
+    if (!question.trim()) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: question,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
+    setInputText("");
+    setIsAnalyzing(true);
+
     try {
-      const response = await fetch('/api/ai/analyze-new', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/terminal/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contractText: "Either party may terminate this Agreement with ninety (90) days prior written notice. The Company shall not be liable for any indirect, incidental, or consequential damages.",
-          focusArea: selectedFocus,
-          analysisDepth: 'deep',
+          question,
+          contractText: contractText || undefined,
+          history: messages.slice(-6), // Send last 6 messages for context
         }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Analysis request failed');
-      }
-      
-      const data = await response.json();
-      
-      // Check if response was successfully parsed as structured data
-      if (data._parsed && data.riskScore !== undefined) {
-        // Successfully parsed JSON
-        setAnalysisResult(data);
-      } else if (data.riskScore !== undefined) {
-        // Has partial structured data
-        setAnalysisResult(data);
-      } else {
-        // Raw text response (simple analysis mode)
-        setAnalysisResult({
-          analysis: data.analysis,
-          model: data.model,
-        });
-      }
+
+      if (!res.ok) throw new Error("Failed to get response");
+
+      const data = await res.json();
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.response,
+        timestamp: new Date(),
+      };
+
+      const finalMessages = [...updatedMessages, assistantMessage];
+      setMessages(finalMessages);
+      saveChatHistory(finalMessages, contractText);
     } catch (error) {
-      console.error('Analysis error:', error);
-      setAnalysisError(error instanceof Error ? error.message : 'Analysis failed');
+      console.error("Chat error:", error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "I apologize, but I encountered an error processing your request. Please try again.",
+        timestamp: new Date(),
+      };
+      
+      setMessages([...updatedMessages, errorMessage]);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const getRiskColor = (score: number) => {
-    if (score <= 40) return "bg-green-500";
-    if (score <= 70) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-
-  const getRiskLabel = (score: number) => {
-    if (score <= 40) return "Low Risk";
-    if (score <= 70) return "Medium Risk";
-    return "High Risk";
-  };
-
-  const handleSendMessage = async (message: string) => {
-    if (!message.trim() || isAnalyzing) return;
+  const handleAnalyzeContract = async () => {
+    if (!contractText.trim()) return;
     
-    // Add user message
-    const userMessage: ChatMessage = {
+    setShowContractInput(false);
+    
+    const userMessage: Message = {
       id: Date.now().toString(),
-      role: 'user',
-      content: message,
-      type: 'text'
+      role: "user",
+      content: "Please analyze this contract",
+      timestamp: new Date(),
     };
-    setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
-    
+
+    setMessages([userMessage]);
     setIsAnalyzing(true);
-    
+
     try {
-      const response = await fetch('/api/ai/analyze-new', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/terminal/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contractText: "Either party may terminate this Agreement with ninety (90) days prior written notice. The Company shall not be liable for any indirect, incidental, or consequential damages.",
-          focusArea: selectedFocus,
-          analysisDepth: 'deep',
+          question: "Analyze this contract and identify key terms, risks, and suggestions for improvement.",
+          contractText,
         }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Analysis request failed');
-      }
-      
-      const data = await response.json();
-      
-      const assistantMessage: ChatMessage = {
+
+      if (!res.ok) throw new Error("Failed to analyze");
+
+      const data = await res.json();
+
+      const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: data.analysis || 'Analysis completed.',
-        type: 'analysis',
-        analysisData: data.riskScore !== undefined ? data : undefined
+        role: "assistant",
+        content: data.response,
+        timestamp: new Date(),
       };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      if (data.riskScore !== undefined) {
-        setAnalysisResult(data);
-      }
+
+      const finalMessages = [userMessage, assistantMessage];
+      setMessages(finalMessages);
+      saveChatHistory(finalMessages, contractText);
     } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage: ChatMessage = {
+      console.error("Analysis error:", error);
+      
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
-        type: 'text'
+        role: "assistant",
+        content: "I apologize, but I couldn't analyze the contract. Please ensure the text is clear and try again.",
+        timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      
+      setMessages([userMessage, errorMessage]);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handleQuickQuestion = (question: string) => {
-    handleSendMessage(question);
+    if (contractText) {
+      handleSendMessage(question);
+    } else {
+      // General legal question without contract
+      handleSendMessage(question);
+    }
   };
 
-  // Initial state - No contract selected
-  if (!selectedContract) {
-    return (
-      <div className="flex h-full flex-col bg-[#FFFDF8] items-center justify-center p-10">
-        <div className="text-center max-w-[500px]">
-          <div className="mb-6">
-            <RobotWaiting width={160} height={160} className="mx-auto" />
-          </div>
+  const startNewChat = () => {
+    setMessages([]);
+    setContractText("");
+    setShowContractInput(true);
+  };
 
-          <h2 className="text-2xl font-semibold text-[#1A1A1A] mb-3">
-            AI Contract Analysis
-          </h2>
-          <p className="text-[15px] text-[#737373] mb-8">
-            Select a contract to analyze or upload a new one
-          </p>
+  const loadChat = (session: ChatSession) => {
+    setMessages(session.messages);
+    setContractText(session.contractText || "");
+    setShowContractInput(false);
+    setShowHistory(false);
+  };
 
-          <div className="space-y-3 w-full mb-6">
-            {contracts.map((contract) => (
-              <button
-                key={contract.id}
-                onClick={() => setSelectedContract(contract)}
-                className="w-full flex items-center gap-4 p-4 bg-white rounded-xl border border-[#E6DCCA] hover:border-[#F59E0B] hover:shadow-md transition-all text-left"
-              >
-                <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center shrink-0">
-                  <contract.Icon width={22} height={22} className="text-[#B45309]" />
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-[#1A1A1A]">{contract.name}</div>
-                  <div className="text-sm text-[#737373]">{contract.type}</div>
-                </div>
-                <span className="text-[#F59E0B] font-medium text-sm">Analyze →</span>
-              </button>
-            ))}
-          </div>
+  const deleteChat = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = chatHistory.filter((chat) => chat.id !== id);
+    setChatHistory(updated);
+    localStorage.setItem("terminalChatHistory", JSON.stringify(updated));
+  };
 
-          <div className="flex items-center gap-4 my-6">
-            <div className="flex-1 h-px bg-[#E6DCCA]"></div>
-            <span className="text-sm text-[#A3A3A3]">or</span>
-            <div className="flex-1 h-px bg-[#E6DCCA]"></div>
-          </div>
-
-          <Link href="/upload">
-            <button className="w-full flex items-center justify-center gap-2 px-6 py-4 border-2 border-dashed border-[#E6DCCA] rounded-xl text-[#737373] hover:border-[#F59E0B] hover:text-[#F59E0B] hover:bg-[#FFFDF8] transition-all">
-              <Upload className="w-5 h-5" />
-              Upload New Contract
-            </button>
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // Analysis state - Contract selected
   return (
-    <div className="flex h-full flex-col bg-[#FFFDF8]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-[#E6DCCA]">
-        <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-[#059669]"></span>
-          <span className="text-[13px] font-medium text-[#737373] tracking-wide">
-            SIGNOVA INTELLIGENCE
-          </span>
-        </div>
-        
-        <div className="relative">
-          <button
-            onClick={() => setShowContractSelector(!showContractSelector)}
-            className="flex items-center gap-2 text-sm text-[#525252] bg-white px-3 py-2 rounded-lg border border-[#E6DCCA] hover:border-[#F59E0B] transition-colors"
-          >
-            <selectedContract.Icon width={18} height={18} className="text-[#B45309]" />
-            <span>{selectedContract.name}</span>
-            <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />
-          </button>
+    <div className="flex h-full bg-[#F8F7F4]">
+      {/* Sidebar - Chat History */}
+      {showHistory && (
+        <div className="w-72 bg-white border-r border-[#E5E7EB] flex flex-col">
+          <div className="p-4 border-b border-[#E5E7EB]">
+            <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2">
+              <History className="w-4 h-4" />
+              Chat History
+            </h3>
+          </div>
           
-          {showContractSelector && (
-            <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-[#E6DCCA] shadow-lg z-10">
-              <div className="p-2">
-                {contracts.map((contract) => (
-                  <button
-                    key={contract.id}
-                    onClick={() => {
-                      setSelectedContract(contract);
-                      setShowContractSelector(false);
-                      setAnalysisResult(null);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-[#F5EFE6] ${
-                      selectedContract.id === contract.id ? "bg-[#FEF3C7]" : ""
-                    }`}
-                  >
-                    <contract.Icon width={18} height={18} className="text-[#B45309]" />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-[#1A1A1A]">{contract.name}</div>
-                      <div className="text-xs text-[#737373]">{contract.type}</div>
-                    </div>
-                  </button>
-                ))}
-                <hr className="my-2 border-[#E6DCCA]" />
-                <Link href="/upload">
-                  <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:bg-[#F5EFE6] text-[#F59E0B]">
-                    <Upload className="w-4 h-4" />
-                    <span className="text-sm font-medium">Upload New</span>
-                  </button>
-                </Link>
-              </div>
-            </div>
-          )}
+          <div className="flex-1 overflow-y-auto">
+            {chatHistory.length === 0 ? (
+              <p className="p-4 text-sm text-[#9CA3AF] text-center">No chat history yet</p>
+            ) : (
+              chatHistory.map((chat) => (
+                <div
+                  key={chat.id}
+                  onClick={() => loadChat(chat)}
+                  className="p-3 border-b border-[#F3F4F6] hover:bg-[#F9FAFB] cursor-pointer group"
+                >
+                  <div className="flex items-start justify-between">
+                    <p className="text-sm text-[#374151] line-clamp-2 flex-1 mr-2">{chat.title}</p>
+                    <button
+                      onClick={(e) => deleteChat(chat.id, e)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded"
+                    >
+                      <Trash2 className="w-3 h-3 text-red-400" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#9CA3AF] mt-1">
+                    {chat.createdAt.toLocaleDateString()}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <button
+            onClick={() => setShowHistory(false)}
+            className="p-4 text-sm text-[#6B7280] hover:text-[#1A1A1A] border-t border-[#E5E7EB]"
+          >
+            Close History
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Chat Area */}
-      <div className="flex-1 overflow-auto px-8 py-8 space-y-7">
-        {/* Ready to analyze */}
-        {!analysisResult && !isAnalyzing && (
-          <>
-            <hr className="border-[#E6DCCA]" />
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-[#1A1A1A]">AI Legal Assistant</h1>
+            <p className="text-sm text-[#6B7280]">
+              {contractText 
+                ? "Analyzing your contract - ask anything about it"
+                : "Ask legal questions or paste contract text for analysis"
+              }
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-[#6B7280] hover:text-[#1A1A1A] hover:bg-[#F3F4F6] rounded-lg transition-colors"
+            >
+              <History className="w-4 h-4" />
+              History
+            </button>
             
-            {/* Focus Selection */}
-            <div className="space-y-4">
-              <p className="text-[15px] font-medium text-[#1A1A1A] font-mono">
-                What would you like to review?
-              </p>
+            <button
+              onClick={startNewChat}
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Chat
+            </button>
+          </div>
+        </div>
+
+        {/* Contract Input (shown initially) */}
+        {showContractInput && (
+          <div className="p-6 max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-[#D97706]" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[#1A1A1A]">Paste Contract Text</h3>
+                  <p className="text-sm text-[#6B7280]">Or skip and ask general legal questions</p>
+                </div>
+              </div>
               
-              <div className="flex flex-wrap gap-3">
-                {focusAreas.map((area) => (
+              <textarea
+                value={contractText}
+                onChange={(e) => setContractText(e.target.value)}
+                placeholder="Paste your contract text here for analysis..."
+                rows={10}
+                className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none"
+              />
+              
+              <div className="flex items-center justify-between mt-4">
+                <button
+                  onClick={() => setShowContractInput(false)}
+                  className="text-sm text-[#6B7280] hover:text-[#1A1A1A]"
+                >
+                  Skip & ask general questions →
+                </button>
+                
+                <button
+                  onClick={handleAnalyzeContract}
+                  disabled={!contractText.trim() || isAnalyzing}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-4 h-4" />
+                      Analyze Contract
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Questions */}
+            <div className="mt-8">
+              <h3 className="text-sm font-medium text-[#6B7280] mb-4">Popular Legal Questions</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {QUICK_QUESTIONS.map((question, idx) => (
                   <button
-                    key={area.name}
-                    onClick={() => setSelectedFocus(area.name)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-[14px] transition-colors ${
-                      selectedFocus === area.name
-                        ? "bg-[#FEF3C7] border-[#F59E0B] text-[#B45309] font-medium"
-                        : "border-[#E6DCCA] text-[#525252] hover:bg-[#F5EFE6]"
-                    }`}
+                    key={idx}
+                    onClick={() => {
+                      setShowContractInput(false);
+                      handleQuickQuestion(question);
+                    }}
+                    className="p-3 text-left text-sm bg-white border border-[#E5E7EB] rounded-lg hover:border-[#F59E0B] hover:bg-[#FEF3C7]/30 transition-all"
                   >
-                    {selectedFocus === area.name && <Check className="w-4 h-4" />}
-                    {selectedFocus !== area.name && (
-                      <span className="w-4 h-4 rounded border-2 border-[#D97706]" />
-                    )}
-                    <span>{area.name}</span>
-                    {area.riskCount > 0 && (
-                      <span className={`ml-1 px-1.5 py-0.5 rounded text-xs ${
-                        area.riskCount >= 2 ? "bg-red-100 text-red-600" : "bg-yellow-100 text-yellow-600"
-                      }`}>
-                        {area.riskCount}
-                      </span>
-                    )}
+                    {question}
                   </button>
                 ))}
               </div>
-              
-              <button
-                onClick={startAnalysis}
-                className="mt-4 px-6 py-3 bg-[#F59E0B] hover:bg-[#D97706] text-white rounded-xl font-medium transition-colors"
-              >
-                Start Analysis
-              </button>
             </div>
-          </>
-        )}
-
-        {/* Analysis Loading - Terminal Animation */}
-        {isAnalyzing && (
-          <TerminalAnimation 
-            isAnalyzing={isAnalyzing} 
-            userCountry="Malaysia" 
-          />
-        )}
-
-        {/* Error State */}
-        {analysisError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-red-700 mb-2">
-              <AlertCircle className="w-5 h-5" />
-              <span className="font-medium">Analysis failed</span>
-            </div>
-            <p className="text-sm text-red-600">{analysisError}</p>
-            <button
-              onClick={() => {
-                setAnalysisError(null);
-                setAnalysisResult(null);
-              }}
-              className="mt-3 text-sm text-red-700 hover:underline"
-            >
-              Try again
-            </button>
           </div>
         )}
 
-        {/* Analysis Results with Animation */}
-        {analysisResult && (
+        {/* Chat Interface */}
+        {!showContractInput && (
           <>
-            {/* Dynamic robot based on risk score */}
-            {!isAnalyzing && analysisResult.riskScore !== undefined && (
-              <div className="flex justify-center mb-2">
-                {analysisResult.riskScore > 70 ? (
-                  <RobotFoundRisk width={80} height={80} />
-                ) : analysisResult.riskScore <= 40 ? (
-                  <RobotAllClear width={80} height={80} />
-                ) : (
-                  <RobotComplete width={80} height={80} />
-                )}
+            <div className="flex-1 overflow-y-auto p-6">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
+                  <div className="w-16 h-16 rounded-full bg-[#F3F4F6] flex items-center justify-center mb-4">
+                    <MessageSquare className="w-8 h-8 text-[#9CA3AF]" />
+                  </div>
+                  <h3 className="text-lg font-medium text-[#1A1A1A] mb-2">How can I help you today?</h3>
+                  <p className="text-sm text-[#6B7280]">
+                    {contractText 
+                      ? "Ask me anything about your contract"
+                      : "Ask legal questions or start a new chat to analyze a contract"
+                    }
+                  </p>
+                </div>
+              ) : (
+                <div className="max-w-3xl mx-auto space-y-6">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        message.role === "user" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-[80%] px-4 py-3 rounded-2xl ${
+                          message.role === "user"
+                            ? "bg-[#1A1A1A] text-white"
+                            : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
+                        }`}
+                      >
+                        <div className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                          {message.content}
+                        </div>
+                        <div
+                          className={`text-xs mt-2 ${
+                            message.role === "user" ? "text-gray-400" : "text-[#9CA3AF]"
+                          }`}
+                        >
+                          {message.timestamp.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isAnalyzing && (
+                    <div className="flex justify-start">
+                      <div className="bg-white border border-[#E5E7EB] px-4 py-3 rounded-2xl">
+                        <Loader2 className="w-5 h-5 animate-spin text-[#F59E0B]" />
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="border-t border-[#E5E7EB] bg-white p-4">
+              {contractText && (
+                <div className="max-w-3xl mx-auto mb-3 px-3 py-2 bg-[#FEF3C7]/50 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-[#B45309]">
+                    <FileText className="w-4 h-4" />
+                    Contract text loaded
+                  </div>
+                  <button
+                    onClick={() => setContractText("")}
+                    className="text-xs text-[#9CA3AF] hover:text-red-500"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+              
+              <div className="max-w-3xl mx-auto flex items-end gap-3">
+                <textarea
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(inputText);
+                    }
+                  }}
+                  placeholder={
+                    contractText
+                      ? "Ask about this contract..."
+                      : "Ask a legal question..."
+                  }
+                  rows={1}
+                  className="flex-1 px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32"
+                  style={{ minHeight: "48px" }}
+                />
+                
+                <button
+                  onClick={() => handleSendMessage(inputText)}
+                  disabled={!inputText.trim() || isAnalyzing}
+                  className="px-4 py-3 bg-[#F59E0B] text-white rounded-xl hover:bg-[#D97706] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
               </div>
-            )}
-            <ResultsView result={analysisResult} isAnalyzing={isAnalyzing} />
+              
+              <p className="text-xs text-[#9CA3AF] text-center mt-2">
+                Press Enter to send, Shift+Enter for new line
+              </p>
+            </div>
           </>
         )}
-
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Quick Questions */}
-      <div className="border-t border-[#E6DCCA] px-8 pt-4">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-xs text-[#737373]">Quick questions:</span>
-        </div>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {quickQuestions.map((question, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleQuickQuestion(question)}
-              disabled={isAnalyzing}
-              className="px-4 py-2 bg-white border border-[#E6DCCA] rounded-lg text-sm text-[#525252] hover:border-[#F59E0B] hover:text-[#F59E0B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {question}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Input Area */}
-      <div className="border-t border-[#E6DCCA] px-8 py-5">
-        <div className="flex items-end gap-3 bg-white rounded-2xl border border-[#E6DCCA] p-4">
-          <input
-            type="text"
-            placeholder="Ask Signova anything about this contract..."
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage(inputValue);
-              }
-            }}
-            disabled={isAnalyzing}
-            className="flex-1 bg-transparent text-[15px] placeholder:text-[#A3A3A3] focus:outline-none font-mono disabled:opacity-50"
-          />
-          <button 
-            onClick={() => handleSendMessage(inputValue)}
-            disabled={isAnalyzing || !inputValue.trim()}
-            className="w-10 h-10 rounded-xl bg-[#F59E0B] hover:bg-[#D97706] flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ArrowUp className="w-5 h-5 text-white" />
-          </button>
-        </div>
-
-        <div className="flex items-center justify-center gap-2 mt-3">
-          <Shield className="w-3.5 h-3.5 text-[#A3A3A3]" />
-          <span className="text-xs text-[#A3A3A3]">
-            AI analysis for informational purposes only. Not legal advice.
-          </span>
-        </div>
       </div>
     </div>
   );

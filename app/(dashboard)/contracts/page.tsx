@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { 
   Plus, 
   SlidersHorizontal, 
   Search, 
   MoreVertical,
-  AlertCircle,
-  Check,
-  X
+  Loader2
 } from "lucide-react";
 import { 
   EmptyContracts, 
@@ -33,15 +31,16 @@ import {
 } from "@/components/illustrations";
 
 interface Contract {
-  id: number;
+  id: string;
   name: string;
   type: string;
   description: string;
-  value: string;
-  expiryDate: string | null;
+  amount: string | null;
+  expiry_date: string | null;
   owner: string;
-  ownerInitial: string;
+  owner_initial: string;
   status: 'active' | 'expiring_soon' | 'expired' | 'indefinite';
+  created_at: string;
 }
 
 // Helper function: Calculate expiry status
@@ -65,64 +64,6 @@ const getExpiryStatus = (expiryDate: string | null): { status: Contract['status'
     return { status: 'active', daysLeft: diffDays, label: `Exp: ${expiry.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` };
   }
 };
-
-const mockContracts: Contract[] = [
-  {
-    id: 1,
-    name: "Acme Corp MSA",
-    type: "MSA",
-    description: "Master Service Agreement for Q3 enterprise software deliverables covering all...",
-    value: "$120,000",
-    expiryDate: "2024-12-15",
-    owner: "Sarah",
-    ownerInitial: "S",
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "Dunder Mifflin Renewal",
-    type: "Renewal",
-    description: "Annual paper supply contract renewal with updated pricing terms and volume discounts.",
-    value: "$45,000",
-    expiryDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 2 days from now
-    owner: "Mike",
-    ownerInitial: "M",
-    status: "expiring_soon",
-  },
-  {
-    id: 3,
-    name: "Stark Industries NDA",
-    type: "NDA",
-    description: "Non-disclosure agreement for project \"Iron Legion\". Strict confidentiality clauses applied.",
-    value: "N/A",
-    expiryDate: null,
-    owner: "Tony",
-    ownerInitial: "T",
-    status: "indefinite",
-  },
-  {
-    id: 4,
-    name: "Freelance Contractor (J. Doe)",
-    type: "Contractor",
-    description: "Independent contractor agreement for frontend development services.",
-    value: "$85/hr",
-    expiryDate: "2024-10-30",
-    owner: "Jane",
-    ownerInitial: "J",
-    status: "expired",
-  },
-  {
-    id: 5,
-    name: "Health Benefit Plan 2024",
-    type: "Internal",
-    description: "Internal HR document regarding employee health benefits package 2024 updates.",
-    value: "Internal",
-    expiryDate: "2024-12-31",
-    owner: "HR",
-    ownerInitial: "H",
-    status: "active",
-  },
-];
 
 const contractTypes = ["All", "MSA", "NDA", "Employment", "Contractor", "Renewal", "Lease", "Service", "Other"];
 const contractStatuses = ["All", "Active", "Expiring Soon", "Expired", "Indefinite"];
@@ -162,16 +103,65 @@ const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
   }
 };
 
+// Format currency
+const formatCurrency = (amount: string | null): string => {
+  if (!amount) return 'N/A';
+  return amount;
+};
+
 export default function ContractsPage() {
   const [activeTab, setActiveTab] = useState("All Contracts");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedType, setSelectedType] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
-  const [contracts] = useState<Contract[]>(mockContracts);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const tabs = ["All Contracts", "Drafts", "Archived"];
+
+  // Fetch contracts from API
+  useEffect(() => {
+    const fetchContracts = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const response = await fetch('/api/contracts');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch contracts');
+        }
+        
+        const data = await response.json();
+        
+        // Transform data to match Contract interface
+        const transformedContracts: Contract[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.name || item.title || 'Untitled Contract',
+          type: item.type || 'Other',
+          description: item.summary || item.description || 'No description available',
+          amount: item.amount ? `$${item.amount}` : null,
+          expiry_date: item.expiry_date,
+          owner: item.owner || 'You',
+          owner_initial: item.owner?.charAt(0).toUpperCase() || 'Y',
+          status: item.status || 'active',
+          created_at: item.created_at,
+        }));
+        
+        setContracts(transformedContracts);
+      } catch (err: any) {
+        console.error('Error fetching contracts:', err);
+        setError(err.message || 'Failed to load contracts');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchContracts();
+  }, []);
 
   // Filter contracts
   const filteredContracts = useMemo(() => {
@@ -185,12 +175,13 @@ export default function ContractsPage() {
       // Type filter
       const matchesType = selectedType === "All" || contract.type === selectedType;
       
-      // Status filter
+      // Status filter - calculate real status from expiry_date
+      const expiryInfo = getExpiryStatus(contract.expiry_date);
       const matchesStatus = selectedStatus === "All" || 
-        (selectedStatus === "Expiring Soon" && contract.status === "expiring_soon") ||
-        (selectedStatus === "Expired" && contract.status === "expired") ||
-        (selectedStatus === "Active" && contract.status === "active") ||
-        (selectedStatus === "Indefinite" && contract.status === "indefinite");
+        (selectedStatus === "Expiring Soon" && expiryInfo.status === "expiring_soon") ||
+        (selectedStatus === "Expired" && expiryInfo.status === "expired") ||
+        (selectedStatus === "Active" && expiryInfo.status === "active") ||
+        (selectedStatus === "Indefinite" && expiryInfo.status === "indefinite");
       
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -209,8 +200,9 @@ export default function ContractsPage() {
     }
   };
 
-  const getStatusIndicator = (status: Contract['status']) => {
-    switch (status) {
+  const getStatusIndicator = (expiryDate: string | null) => {
+    const expiryInfo = getExpiryStatus(expiryDate);
+    switch (expiryInfo.status) {
       case 'expired':
         return "bg-red-500";
       case 'expiring_soon':
@@ -226,16 +218,19 @@ export default function ContractsPage() {
   const stats = useMemo(() => {
     const total = contracts.length;
     const expiringThisMonth = contracts.filter(c => {
-      if (!c.expiryDate) return false;
-      const expiry = new Date(c.expiryDate);
+      if (!c.expiry_date) return false;
+      const expiry = new Date(c.expiry_date);
       const today = new Date();
       const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
       return expiry <= thirtyDaysFromNow && expiry >= today;
     }).length;
     
-    const highRisk = contracts.filter(c => c.status === 'expired' || c.status === 'expiring_soon').length;
-    // For now, assume all contracts are analyzed if they have a risk score
-    const analyzed = contracts.filter(c => c.status !== 'expired').length;
+    const highRisk = contracts.filter(c => {
+      const expiryInfo = getExpiryStatus(c.expiry_date);
+      return expiryInfo.status === 'expired' || expiryInfo.status === 'expiring_soon';
+    }).length;
+    
+    const analyzed = contracts.length; // All uploaded contracts are considered analyzed
     
     return {
       total,
@@ -245,6 +240,34 @@ export default function ContractsPage() {
       totalContracts: total
     };
   }, [contracts]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F8F7F4] p-8 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#F59E0B]" />
+          <p className="text-[#6B7280]">Loading contracts...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#F8F7F4] p-8 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-500 mb-4 text-lg">⚠️ Error loading contracts</div>
+          <p className="text-[#6B7280] mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-[#F59E0B] text-white rounded-lg hover:bg-[#D97706]"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] p-8">
@@ -457,7 +480,7 @@ export default function ContractsPage() {
         {filteredContracts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredContracts.map((contract) => {
-              const expiryInfo = getExpiryStatus(contract.expiryDate);
+              const expiryInfo = getExpiryStatus(contract.expiry_date);
               
               return (
                 <div key={contract.id} className="relative group">
@@ -466,9 +489,9 @@ export default function ContractsPage() {
                       {/* Header with status indicator */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="w-12 h-12 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
-                          {getContractTypeIcon(contract.type, contract.status === 'expired')}
+                          {getContractTypeIcon(contract.type, expiryInfo.status === 'expired')}
                         </div>
-                        <div className={`w-2 h-2 rounded-full ${getStatusIndicator(contract.status)}`} />
+                        <div className={`w-2 h-2 rounded-full ${getStatusIndicator(contract.expiry_date)}`} />
                       </div>
 
                       {/* Title */}
@@ -484,7 +507,7 @@ export default function ContractsPage() {
                         <span className="px-2 py-1 bg-[#F3F4F6] text-[#374151] text-xs font-medium rounded">
                           {contract.type}
                         </span>
-                        <span className={`px-2 py-1 text-xs font-medium rounded border ${getExpiryBadgeStyle(contract.status)}`}>
+                        <span className={`px-2 py-1 text-xs font-medium rounded border ${getExpiryBadgeStyle(expiryInfo.status)}`}>
                           {expiryInfo.label}
                         </span>
                       </div>
@@ -493,12 +516,12 @@ export default function ContractsPage() {
                       <div className="flex items-center justify-between pt-4 border-t border-[#F3F4F6]">
                         <div>
                           <p className="text-[11px] text-[#9CA3AF] uppercase tracking-wide mb-0.5">Value</p>
-                          <p className="text-[13px] font-medium text-[#1A1A1A]">{contract.value}</p>
+                          <p className="text-[13px] font-medium text-[#1A1A1A]">{formatCurrency(contract.amount)}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <p className="text-[11px] text-[#9CA3AF] uppercase tracking-wide">Owner</p>
                           <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#F59E0B] to-[#D97706] flex items-center justify-center text-white text-xs font-medium">
-                            {contract.ownerInitial}
+                            {contract.owner_initial}
                           </div>
                         </div>
                       </div>
@@ -520,12 +543,16 @@ export default function ContractsPage() {
                     
                     {openMenuId === contract.id && (
                       <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-[#E5E7EB] z-10">
-                        <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] first:rounded-t-lg">
-                          View
-                        </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
-                          Analyze
-                        </button>
+                        <Link href={`/contracts/${contract.id}`}>
+                          <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] first:rounded-t-lg">
+                            View
+                          </button>
+                        </Link>
+                        <Link href={`/contracts/${contract.id}?tab=analysis`}>
+                          <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
+                            Analyze
+                          </button>
+                        </Link>
                         <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                           Archive
                         </button>

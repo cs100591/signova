@@ -1,89 +1,113 @@
 import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseServer
+    const supabase = await createSupabaseServerClient();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const { data, error } = await supabase
       .from('contracts')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch contracts', details: error.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(data || []);
-  } catch (error) {
-    console.error('Database error:', error);
-    // Return mock data for demo
-    return NextResponse.json([
-      {
-        id: 1,
-        name: "Acme Corp MSA",
-        type: "Service Agreement",
-        amount: "$150,000/year",
-        expiry_date: "2024-12-31",
-        summary: "Master Service Agreement for Q3 enterprise software deliverables.",
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: 2,
-        name: "Dunder Mifflin Renewal",
-        type: "Renewal",
-        amount: null,
-        expiry_date: "2024-03-15",
-        summary: "Annual paper supply contract renewal with updated pricing terms.",
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: 3,
-        name: "Stark Industries NDA",
-        type: "NDA",
-        amount: null,
-        expiry_date: null,
-        summary: "Non-disclosure agreement for project Iron Legion.",
-        created_at: new Date().toISOString(),
-      },
-    ]);
+  } catch (error: any) {
+    console.error('Server error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error', details: error.message },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: Request) {
-  let body: any;
-  
   try {
-    body = await request.json();
-    const { workspace_id, name, type, amount, effective_date, expiry_date, summary, file_url } = body;
+    const supabase = await createSupabaseServerClient();
     
-    const { data, error } = await supabaseServer
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { 
+      workspace_id, 
+      name, 
+      type, 
+      amount, 
+      currency,
+      effective_date, 
+      expiry_date, 
+      summary, 
+      file_url,
+      party_a,
+      party_b
+    } = body;
+    
+    // Validate required fields
+    if (!name || !type) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name and type are required' },
+        { status: 400 }
+      );
+    }
+    
+    const { data, error } = await supabase
       .from('contracts')
       .insert({
-        workspace_id: workspace_id || 1,
+        user_id: user.id,
+        workspace_id: workspace_id || null,
         name,
         type,
-        amount,
-        effective_date,
-        expiry_date,
+        amount: amount ? parseFloat(amount) : null,
+        currency: currency || 'USD',
+        effective_date: effective_date || null,
+        expiry_date: expiry_date || null,
         summary,
         file_url,
+        party_a,
+        party_b,
+        status: 'active',
       })
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('Database error:', error);
+      return NextResponse.json(
+        { error: 'Failed to save contract', details: error.message },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(data, { status: 201 });
-  } catch (error) {
-    console.error('Database error:', error);
-    // Return mock success for demo
-    return NextResponse.json({ 
-      id: Date.now(),
-      workspace_id: 1,
-      name: body?.name || "New Contract",
-      type: body?.type || "Service Agreement",
-      amount: body?.amount || null,
-      effective_date: body?.effective_date || new Date().toISOString().split('T')[0],
-      expiry_date: body?.expiry_date || null,
-      summary: body?.summary || "",
-      created_at: new Date().toISOString(),
-    }, { status: 201 });
+  } catch (error: any) {
+    console.error('Server error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error', details: error.message },
+      { status: 500 }
+    );
   }
 }

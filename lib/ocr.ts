@@ -1,19 +1,5 @@
 import { ImageAnnotatorClient } from "@google-cloud/vision";
-// @ts-ignore
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { createCanvas } from "canvas";
 import { extractTextWithOpenRouter } from "./openrouter-ocr";
-
-// Polyfill DOMMatrix for Node.js environment
-if (typeof DOMMatrix === 'undefined') {
-  // @ts-ignore
-  global.DOMMatrix = class DOMMatrix {
-    constructor(init?: any) {}
-    multiply(other: DOMMatrix) { return this; }
-    translate(x: number, y: number) { return this; }
-    scale(x: number, y: number) { return this; }
-  };
-}
 
 // Initialize Vision client
 let visionClient: ImageAnnotatorClient | undefined;
@@ -26,6 +12,22 @@ try {
 } catch (error) {
   console.warn("[OCR] Google Vision not configured:", error);
 }
+
+/**
+ * Simple PDF text extraction using OpenRouter (Gemini)
+ * This is more reliable than pdfjs-dist which has compatibility issues
+ */
+const extractPDFTextWithAI = async (pdfBuffer: Buffer, fileName: string): Promise<string> => {
+  console.log("[OCR] Using OpenRouter AI for PDF extraction...");
+  
+  try {
+    const result = await extractTextWithOpenRouter(pdfBuffer, 'application/pdf', fileName);
+    return result.text;
+  } catch (error: any) {
+    console.error("[OCR] OpenRouter PDF extraction failed:", error.message);
+    throw new Error("Could not extract text from PDF. Please try a text-based PDF or clearer scan.");
+  }
+};
 
 /**
  * OCR image files (JPG, PNG, WEBP)
@@ -54,183 +56,78 @@ export const ocrImage = async (imageBuffer: Buffer): Promise<string> => {
 };
 
 /**
- * Process PDF - automatically detect text vs scanned
+ * Process PDF - uses AI for reliable extraction
  */
-export const processPDF = async (pdfBuffer: Buffer): Promise<string> => {
-  // Step 1: Try to extract text layer
-  const textLayerContent = await extractTextLayer(pdfBuffer);
+export const processPDF = async (pdfBuffer: Buffer, fileName: string = "document.pdf"): Promise<string> => {
+  console.log("[OCR] Processing PDF...");
   
-  // Step 2: If enough text found, use text layer (not scanned)
-  if (textLayerContent.length >= 200) {
-    console.log("[OCR] Text-based PDF detected - using text layer");
-    return textLayerContent;
-  }
-
-  // Step 3: Scanned PDF - convert to images and OCR
-  console.log("[OCR] Scanned PDF detected - using OCR");
-  return await ocrScannedPDF(pdfBuffer);
-};
-
-/**
- * Extract text layer from text-based PDF
- */
-const extractTextLayer = async (pdfBuffer: Buffer): Promise<string> => {
+  // Try OpenRouter AI extraction first (most reliable)
   try {
-    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
-    let fullText = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item: any) => item.str)
-        .join(" ");
-      fullText += pageText + "\n\n";
-    }
-
-    return fullText.trim();
-  } catch (error) {
-    console.error("[OCR] Text extraction failed:", error);
-    return ""; // Fallback to OCR
-  }
-};
-
-/**
- * OCR scanned PDF (convert pages to images)
- */
-const ocrScannedPDF = async (pdfBuffer: Buffer): Promise<string> => {
-  if (!visionClient) {
-    throw new Error("OCR service not configured");
-  }
-
-  try {
-    const pdf = await pdfjsLib.getDocument({ data: pdfBuffer }).promise;
-    const totalPages = pdf.numPages;
+    const text = await extractPDFTextWithAI(pdfBuffer, fileName);
     
-    // Limit to first 20 pages for large documents
-    const maxPages = Math.min(totalPages, 20);
-    let fullText = "";
-
-    console.log(`[OCR] Processing ${maxPages} of ${totalPages} pages...`);
-
-    for (let i = 1; i <= maxPages; i++) {
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 2.0 }); // 2x for better OCR accuracy
-
-      // Render to canvas
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
-      
-      await page.render({
-        canvasContext: context as any,
-        viewport,
-        // @ts-ignore - canvas is optional for node-canvas
-        canvas: canvas as any,
-      }).promise;
-
-      // Canvas to JPEG buffer
-      const imageBuffer = canvas.toBuffer("image/jpeg", { quality: 0.95 });
-
-      // OCR this page
-      const [result] = await visionClient.documentTextDetection({
-        image: { content: imageBuffer.toString("base64") },
-      });
-
-      const pageText = result.fullTextAnnotation?.text || "";
-      fullText += `[Page ${i}]\n${pageText}\n\n`;
+    if (text && text.trim().length >= 100) {
+      console.log(`[OCR] Successfully extracted ${text.length} characters using AI`);
+      return text;
     }
-
-    // Add note if document was truncated
-    if (totalPages > 20) {
-      fullText += `\n[Note: Document has ${totalPages} pages. Analysis based on first 20 pages.]\n`;
-    }
-
-    return fullText.trim();
+    
+    throw new Error("Insufficient text extracted");
   } catch (error: any) {
-    console.error("[OCR] PDF OCR failed:", error.message);
-    throw new Error("Could not process scanned PDF. Please try a clearer scan or text-based PDF.");
+    console.error("[OCR] PDF processing failed:", error.message);
+    throw new Error("Could not extract text from PDF. Please ensure it's not password-protected and contains selectable text, or try uploading as an image.");
   }
 };
 
 /**
  * Main entry point - process any file type
- * Falls back to OpenRouter if Google Vision fails
  */
 export const processFile = async (
   fileBuffer: Buffer,
   mimeType: string,
   fileName: string = "document"
-): Promise<{ text: string; isScanned: boolean; ocrSource: "pdfjs" | "vision" | "openrouter" }> => {
+): Promise<{ text: string; isScanned: boolean; ocrSource: "vision" | "openrouter" }> => {
   let text = "";
   let isScanned = false;
-  let ocrSource: "pdfjs" | "vision" | "openrouter" = "vision";
+  let ocrSource: "vision" | "openrouter" = "openrouter";
 
   try {
-    // Phase 1: Try pdf.js text extraction (always free, no API needed)
     if (mimeType === "application/pdf") {
-      const textLayer = await extractTextLayer(fileBuffer);
-      
-      if (textLayer.length >= 200) {
-        console.log("[OCR] Processed as text-based PDF using pdf.js");
-        return { 
-          text: textLayer, 
-          isScanned: false,
-          ocrSource: "pdfjs"
-        };
-      }
-    }
-
-    // Phase 2: Try Google Vision
-    console.log("[OCR] Attempting Google Vision OCR...");
-    try {
-      if (mimeType === "application/pdf") {
-        // For scanned PDFs
-        text = await ocrScannedPDF(fileBuffer);
-        isScanned = true;
-        ocrSource = "vision";
-        console.log("[OCR] Processed scanned PDF with Google Vision");
-      } 
-      else if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
-        text = await ocrImage(fileBuffer);
-        isScanned = true;
-        ocrSource = "vision";
-        console.log("[OCR] Processed image with Google Vision");
-      }
-
-      // Validate Vision result
-      if (text && text.trim().length >= 50) {
-        return { text, isScanned, ocrSource };
-      }
-      
-      // Vision returned empty or insufficient text, try fallback
-      throw new Error("Vision returned insufficient text");
-      
-    } catch (visionError: any) {
-      console.warn("[OCR] Google Vision failed:", visionError.message);
-      
-      // Phase 3: Fallback to OpenRouter
-      console.log("[OCR] Falling back to OpenRouter (Gemini 2.5)...");
-      
-      try {
-        const openRouterResult = await extractTextWithOpenRouter(fileBuffer, mimeType, fileName);
-        text = openRouterResult.text;
+      // PDF - use AI extraction
+      text = await processPDF(fileBuffer, fileName);
+      isScanned = true;
+      ocrSource = "openrouter";
+    } 
+    else if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+      // Images - try Google Vision first, fallback to OpenRouter
+      if (visionClient) {
+        try {
+          text = await ocrImage(fileBuffer);
+          isScanned = true;
+          ocrSource = "vision";
+          console.log("[OCR] Processed image with Google Vision");
+        } catch (visionError: any) {
+          console.warn("[OCR] Google Vision failed, trying OpenRouter:", visionError.message);
+          const result = await extractTextWithOpenRouter(fileBuffer, mimeType, fileName);
+          text = result.text;
+          isScanned = true;
+          ocrSource = "openrouter";
+          console.log("[OCR] Processed image with OpenRouter fallback");
+        }
+      } else {
+        // No Vision client, use OpenRouter directly
+        const result = await extractTextWithOpenRouter(fileBuffer, mimeType, fileName);
+        text = result.text;
         isScanned = true;
         ocrSource = "openrouter";
-        console.log("[OCR] Processed with OpenRouter fallback");
-      } catch (openRouterError: any) {
-        console.error("[OCR] OpenRouter fallback also failed:", openRouterError.message);
-        throw new Error(
-          "Could not extract text from document. Please ensure the file is clear and contains text, or try a text-based PDF."
-        );
+        console.log("[OCR] Processed image with OpenRouter (no Vision)");
       }
+    } else {
+      throw new Error(`Unsupported file type: ${mimeType}`);
     }
 
     // Final validation
     if (!text || text.trim().length < 50) {
       throw new Error(
-        isScanned 
-          ? "Could not extract text from scanned document. Please ensure the image is clear and text is legible."
-          : "Could not extract sufficient text from document. The PDF may be empty or corrupted."
+        "Could not extract sufficient text from the document. The file may be empty, corrupted, or password-protected."
       );
     }
 

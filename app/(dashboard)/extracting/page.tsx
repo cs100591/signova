@@ -1,25 +1,53 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { UploadScanning } from "@/components/illustrations";
 
 export default function ExtractingPage() {
   const router = useRouter();
+  const [fileName, setFileName] = useState("your document");
+  const [currentStep, setCurrentStep] = useState(0);
 
   useEffect(() => {
+    // Get filename from localStorage
+    const data = localStorage.getItem("uploadedContract");
+    if (data) {
+      try {
+        const parsed = JSON.parse(data);
+        if (parsed.fileName) {
+          setFileName(parsed.fileName);
+        }
+      } catch (e) {
+        console.error("Failed to parse uploaded contract data:", e);
+      }
+    }
+
+    // Animate steps
+    const stepInterval = setInterval(() => {
+      setCurrentStep((prev) => {
+        if (prev >= 3) return prev;
+        return prev + 1;
+      });
+    }, 800);
+
+    // Redirect after processing
     const timer = setTimeout(() => {
       router.push("/confirm");
-    }, 4000);
-    return () => clearTimeout(timer);
+    }, 3500);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(stepInterval);
+    };
   }, [router]);
 
   const steps = [
-    { text: "Reading document structure", status: "done" },
-    { text: "Identifying contract type", status: "done" },
-    { text: "Extracting key dates and terms", status: "current" },
-    { text: "Generating summary", status: "pending" },
+    { text: "Reading document structure", status: currentStep >= 0 ? "done" : "pending" },
+    { text: "Identifying contract type", status: currentStep >= 1 ? "done" : "pending" },
+    { text: "Extracting key dates and terms", status: currentStep >= 2 ? "done" : currentStep === 2 ? "current" : "pending" },
+    { text: "Generating summary", status: currentStep >= 3 ? "done" : currentStep === 3 ? "current" : "pending" },
   ];
 
   return (
@@ -60,7 +88,7 @@ export default function ExtractingPage() {
           ))}
         </div>
 
-        <p className="text-sm text-[#737373]">Service-Agreement-Acme.pdf</p>
+        <p className="text-sm text-[#737373] truncate max-w-[300px] mx-auto">{fileName}</p>
       </div>
     </div>
   );
