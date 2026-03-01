@@ -74,25 +74,46 @@ export async function POST(request: Request) {
       );
     }
     
-    const { data, error } = await supabase
+    // Build insert object with only base columns (always safe)
+    const insertData: Record<string, any> = {
+      user_id: user.id,
+      name,
+      type,
+      effective_date: effective_date || null,
+      expiry_date: expiry_date || null,
+      summary,
+      file_url,
+    };
+
+    // Try inserting with all columns first; if it fails due to missing columns,
+    // retry with minimal columns
+    let insertObj: Record<string, any> = {
+      ...insertData,
+      workspace_id: workspace_id || null,
+      amount,
+      currency: currency || 'USD',
+      party_a: party_a || null,
+      party_b: party_b || null,
+      status: 'active',
+    };
+
+    let { data, error } = await supabase
       .from('contracts')
-      .insert({
-        user_id: user.id,
-        workspace_id: workspace_id || null,
-        name,
-        type,
-        amount: amount ? parseFloat(amount) : null,
-        currency: currency || 'USD',
-        effective_date: effective_date || null,
-        expiry_date: expiry_date || null,
-        summary,
-        file_url,
-        party_a,
-        party_b,
-        status: 'active',
-      })
+      .insert(insertObj)
       .select()
       .single();
+
+    // If fails due to missing columns, retry with minimal set
+    if (error && (error.message.includes('column') || error.code === '42703')) {
+      console.warn('[Contracts POST] Some columns missing, retrying with base columns:', error.message);
+      const { data: d2, error: e2 } = await supabase
+        .from('contracts')
+        .insert(insertData)
+        .select()
+        .single();
+      data = d2;
+      error = e2;
+    }
     
     if (error) {
       console.error('Database error:', error);
