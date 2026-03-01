@@ -47,9 +47,13 @@ export async function POST(request: Request) {
       : null;
 
     const contractName = (name || 'Untitled Contract').trim();
+    // Some versions of the DB schema use 'title', while newer versions use 'name'.
+    // We send both to guarantee compatibility and prevent the 'null value in column title' error.
+
     const payload = {
       user_id: user.id,
-      title: contractName,  // DB has "title TEXT NOT NULL" (original schema)
+      title: contractName,
+      name: contractName,
       type,
       amount: amountStr,
       currency: currency || 'USD',
