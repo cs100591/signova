@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 
 interface TerminalStep {
   text: string;
@@ -30,6 +30,9 @@ export function AnalysisTerminal({
     TERMINAL_STEPS.map(text => ({ text, status: 'waiting' }))
   );
   const [displayTexts, setDisplayTexts] = useState<string[]>(new Array(TERMINAL_STEPS.length).fill(''));
+  
+  // Store timeout IDs for cleanup
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isActive) {
@@ -44,7 +47,7 @@ export function AnalysisTerminal({
     const typeNextChar = () => {
       if (currentStepIndex >= TERMINAL_STEPS.length) {
         // All steps completed
-        setTimeout(() => {
+        timeoutRef.current = setTimeout(() => {
           onComplete?.();
         }, 800);
         return;
@@ -60,7 +63,7 @@ export function AnalysisTerminal({
           return newTexts;
         });
         charIndex++;
-        setTimeout(typeNextChar, 30);
+        timeoutRef.current = setTimeout(typeNextChar, 30);
       } else {
         // Step completed, add checkmark and move to next
         setSteps(prev => {
@@ -80,7 +83,7 @@ export function AnalysisTerminal({
         
         currentStepIndex++;
         charIndex = 0;
-        setTimeout(typeNextChar, 200);
+        timeoutRef.current = setTimeout(typeNextChar, 200);
       }
     };
 
@@ -94,7 +97,10 @@ export function AnalysisTerminal({
     typeNextChar();
 
     return () => {
-      // Cleanup handled by isActive check
+      // Clear any pending timeouts
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
     };
   }, [isActive, onComplete]);
 
@@ -128,34 +134,32 @@ export function AnalysisTerminal({
     }
   };
 
+  if (!isActive) return null;
+
   return (
-    <AnimatePresence>
-      {isActive && (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+      className="w-full border border-[#e0d9ce] rounded-xl p-5 bg-[#fafaf9] font-mono text-[13px]"
+      style={{ fontFamily: "'DM Mono', 'Courier New', monospace" }}
+    >
+      {steps.map((step, index) => (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3 }}
-          className="w-full border border-[#e0d9ce] rounded-xl p-5 bg-transparent font-mono text-[13px]"
-          style={{ fontFamily: "'DM Mono', 'Courier New', monospace" }}
+          key={index}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: index * 0.1 }}
+          className={`flex items-center ${getStepColor(step.status)} ${index > 0 ? 'mt-2' : ''}`}
         >
-          {steps.map((step, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: index * 0.1 }}
-              className={`flex items-center ${getStepColor(step.status)} ${index > 0 ? 'mt-2' : ''}`}
-            >
-              {getStepIcon(step.status, index)}
-              <span>{displayTexts[index]}</span>
-              {step.status === 'current' && displayTexts[index] === step.text && (
-                <span className="inline-block w-2 h-4 bg-[#1a1714] ml-0.5 animate-pulse" />
-              )}
-            </motion.div>
-          ))}
+          {getStepIcon(step.status, index)}
+          <span>{displayTexts[index]}</span>
+          {step.status === 'current' && displayTexts[index] === step.text && (
+            <span className="inline-block w-2 h-4 bg-[#1a1714] ml-0.5 animate-pulse" />
+          )}
         </motion.div>
-      )}
-    </AnimatePresence>
+      ))}
+    </motion.div>
   );
 }

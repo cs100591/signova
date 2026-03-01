@@ -103,11 +103,12 @@ export default function ConfirmPage() {
     setSaving(true);
     
     try {
-      // Parse amount
+      // Parse amount with NaN check
       let amount = null;
       if (editedData.amount) {
         const cleaned = editedData.amount.toString().replace(/[^\d.]/g, "");
-        amount = cleaned ? parseFloat(cleaned) : null;
+        const parsed = cleaned ? parseFloat(cleaned) : null;
+        amount = parsed && !isNaN(parsed) ? parsed : null;
       }
       
       const res = await fetch("/api/contracts", {
@@ -175,7 +176,7 @@ export default function ConfirmPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F7F4] p-8">
-      <div className="max-w-[800px] mx-auto">
+      <div className="max-w-[800px] mx-auto pb-24">
         {/* Header */}
         <div className="mb-8">
           <button

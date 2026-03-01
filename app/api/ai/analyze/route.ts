@@ -3,11 +3,11 @@ import { analyzeContract, analyzeContractSimple } from '@/lib/ai';
 
 export async function POST(request: Request) {
   try {
-    const { contractText, focusArea, analysisDepth = 'deep' } = await request.json();
+    const { contractText, focusArea, analysisDepth = 'deep', userCountry = 'United States' } = await request.json();
     
-    if (!contractText || !focusArea) {
+    if (!contractText) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: contractText is required' },
         { status: 400 }
       );
     }

@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS contracts (
 );
 
 -- Add missing columns to existing contracts table (safe to run even if columns exist)
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS amount TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS party_a TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS party_b TEXT;
 ALTER TABLE contracts ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'USD';

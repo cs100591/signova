@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     let insertObj: Record<string, any> = {
       ...insertData,
       workspace_id: workspace_id || null,
-      amount,
+      amount: amount || null,
       currency: currency || 'USD',
       party_a: party_a || null,
       party_b: party_b || null,
@@ -103,12 +103,26 @@ export async function POST(request: Request) {
       .select()
       .single();
 
-    // If fails due to missing columns, retry with minimal set
+    // If fails due to missing columns, retry with minimal set (exclude problematic columns)
     if (error && (error.message.includes('column') || error.code === '42703')) {
-      console.warn('[Contracts POST] Some columns missing, retrying with base columns:', error.message);
+      console.warn('[Contracts POST] Some columns missing, retrying with minimal columns:', error.message);
+      // Minimal set without potentially missing columns
+      const minimalInsertData: Record<string, any> = {
+        user_id: user.id,
+        type,
+        effective_date: effective_date || null,
+        expiry_date: expiry_date || null,
+        summary: summary || null,
+        file_url: file_url || null,
+        status: 'active',
+      };
+      // Only add name if it doesn't seem to be the missing column
+      if (!error.message.includes('name')) {
+        minimalInsertData.name = name;
+      }
       const { data: d2, error: e2 } = await supabase
         .from('contracts')
-        .insert(insertData)
+        .insert(minimalInsertData)
         .select()
         .single();
       data = d2;

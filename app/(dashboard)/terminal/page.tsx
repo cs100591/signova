@@ -119,6 +119,9 @@ export default function TerminalPage() {
 
   // Contract analysis flow
   const startContractAnalysis = async () => {
+    const startTime = Date.now();
+    const minAnimationDuration = 3000; // 3 seconds minimum
+    
     try {
       const response = await fetch("/api/ai/analyze", {
         method: "POST",
@@ -132,7 +135,16 @@ export default function TerminalPage() {
       if (!response.ok) throw new Error("Analysis failed");
 
       const result: AnalysisResult = await response.json();
+      
+      // Ensure animation shows for at least 3 seconds
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minAnimationDuration) {
+        await new Promise(resolve => setTimeout(resolve, minAnimationDuration - elapsed));
+      }
+      
+      // Now set results (this will hide animation and show results)
       setAnalysisResult(result);
+      setIsAnalyzing(false);
       setAnalysisComplete(true);
       
       // Add analysis result as a message
@@ -148,6 +160,15 @@ export default function TerminalPage() {
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Analysis error:", error);
+      
+      // Ensure animation shows for at least 3 seconds even on error
+      const elapsed = Date.now() - startTime;
+      if (elapsed < minAnimationDuration) {
+        await new Promise(resolve => setTimeout(resolve, minAnimationDuration - elapsed));
+      }
+      
+      setIsAnalyzing(false);
+      
       // Add error message
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -156,8 +177,6 @@ export default function TerminalPage() {
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsAnalyzing(false);
     }
   };
 
@@ -527,7 +546,7 @@ export default function TerminalPage() {
                           // Analysis results are rendered separately below
                           <div className="text-sm">Analysis complete ✓</div>
                         ) : (
-                          <MarkdownMessage content={message.content} />
+                          <MarkdownMessage content={message.content} isUser={message.role === "user"} />
                         )}
                         <div
                           className={`text-xs mt-2 ${
