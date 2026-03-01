@@ -5,8 +5,16 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { supabaseClient } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { RobotWaiting } from "@/components/illustrations";
+
+// Create Supabase client directly in this component
+const getSupabaseClient = () => {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,13 +33,31 @@ export default function LoginPage() {
   // Check if already logged in
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabaseClient.auth.getSession();
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         router.push("/contracts");
       }
     };
     checkSession();
   }, [router]);
+
+  const checkOnboardingAndRedirect = async (userId: string | undefined) => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_complete')
+        .eq('id', userId)
+        .single();
+      
+      const redirectPath = profile?.onboarding_complete ? "/contracts" : "/onboarding";
+      router.replace(redirectPath);
+    } catch (err) {
+      console.error("Redirect error:", err);
+      router.replace("/onboarding");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,9 +72,11 @@ export default function LoginPage() {
         return;
       }
 
+      const supabase = getSupabaseClient();
+
       if (isLogin) {
         // Sign in
-        const { data, error: signInError } = await supabaseClient.auth.signInWithPassword({
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
@@ -57,41 +85,15 @@ export default function LoginPage() {
 
         setSuccess("Login successful! Redirecting...");
         
-        // Wait a moment for session to be established
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Check if onboarding is complete
-        let redirectPath = "/onboarding";
-        try {
-          const { data: profile, error: profileError } = await supabaseClient
-            .from('profiles')
-            .select('onboarding_complete')
-            .eq('id', data.user?.id)
-            .single();
-          
-          if (profileError) {
-            console.log("Profile query error:", profileError);
-          } else {
-            console.log("Profile data:", profile);
-            if (profile?.onboarding_complete) {
-              redirectPath = "/contracts";
-            }
-          }
-        } catch (e) {
-          console.error("Profile check error:", e);
-        }
-        
-        console.log("Redirecting to:", redirectPath);
-        window.location.href = redirectPath;
-
+        // Wait for session to be established
+        setTimeout(() => {
+          checkOnboardingAndRedirect(data.user?.id);
+        }, 800);
       } else {
         // Sign up
-        const { data, error: signUpError } = await supabaseClient.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/contracts`,
-          },
         });
 
         if (signUpError) throw signUpError;
@@ -99,11 +101,11 @@ export default function LoginPage() {
         if (data.user?.identities?.length === 0) {
           setError("An account with this email already exists. Please sign in.");
         } else {
-          setSuccess("Account created! Please check your email to confirm your account.");
+          setSuccess("Account created! You can now sign in.");
           setTimeout(() => {
             setIsLogin(true);
             setSuccess("");
-          }, 3000);
+          }, 2000);
         }
       }
     } catch (err: any) {

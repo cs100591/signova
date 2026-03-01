@@ -3,10 +3,10 @@ import { createBrowserClient } from '@supabase/ssr';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Browser client - uses cookies for session persistence (via @supabase/ssr)
+// Browser client - for use in Client Components only
 export const supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
 
-// For server components - use this in API routes and server components
+// Server client factory - for use in Server Components and API routes
 export const createSupabaseServerClient = async () => {
   const { createServerClient } = await import('@supabase/ssr');
   const { cookies } = await import('next/headers');
@@ -31,7 +31,7 @@ export const createSupabaseServerClient = async () => {
   });
 };
 
-// Legacy export for backward compatibility
+// Legacy export - do not use in new code
 export const supabaseServer = supabaseClient;
 
 export default supabaseClient;
