@@ -9,13 +9,20 @@ import {
   MoreVertical,
   AlertCircle,
   Check,
-  X,
-  FileText,
-  AlertTriangle,
-  ShieldAlert,
-  BarChart3
+  X
 } from "lucide-react";
-import { EmptyContracts, EmptySearch } from "@/components/illustrations";
+import { 
+  EmptyContracts, 
+  EmptySearch,
+  ContractNDA,
+  ContractEmployment,
+  ContractLease,
+  ContractContractor,
+  DashboardTotalContracts,
+  DashboardExpiring,
+  DashboardHighRisk,
+  DashboardAnalyzed
+} from "@/components/illustrations";
 
 interface Contract {
   id: number;
@@ -111,6 +118,24 @@ const mockContracts: Contract[] = [
 
 const contractTypes = ["All", "MSA", "NDA", "Employment", "Contractor", "Renewal", "Lease", "Service", "Other"];
 const contractStatuses = ["All", "Active", "Expiring Soon", "Expired", "Indefinite"];
+
+// Helper function to get illustration component based on contract type
+const getContractTypeIllustration = (type: string) => {
+  const illustrationProps = { width: 48, height: 48, className: "text-[#6B7280]" };
+  
+  switch (type) {
+    case "NDA":
+      return <ContractNDA {...illustrationProps} />;
+    case "Employment":
+      return <ContractEmployment {...illustrationProps} />;
+    case "Lease":
+      return <ContractLease {...illustrationProps} />;
+    case "Contractor":
+      return <ContractContractor {...illustrationProps} />;
+    default:
+      return null;
+  }
+};
 
 export default function ContractsPage() {
   const [activeTab, setActiveTab] = useState("All Contracts");
@@ -231,8 +256,8 @@ export default function ContractsPage() {
           {/* Total Contracts */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
-                <FileText className="w-5 h-5 text-[#6B7280]" />
+              <div className="w-12 h-12 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
+                <DashboardTotalContracts width={44} height={44} />
               </div>
               <span className="text-xs text-[#6B7280]">All time</span>
             </div>
@@ -243,8 +268,8 @@ export default function ContractsPage() {
           {/* Expiring This Month */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-50 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-orange-500" />
+              <div className="w-12 h-12 rounded-lg bg-orange-50 flex items-center justify-center">
+                <DashboardExpiring width={44} height={44} />
               </div>
               <span className="text-xs text-[#6B7280]">This month</span>
             </div>
@@ -255,8 +280,8 @@ export default function ContractsPage() {
           {/* High Risk */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-                <ShieldAlert className="w-5 h-5 text-red-500" />
+              <div className="w-12 h-12 rounded-lg bg-red-50 flex items-center justify-center">
+                <DashboardHighRisk width={44} height={44} />
               </div>
               <span className="text-xs text-[#6B7280]">Needs attention</span>
             </div>
@@ -267,8 +292,8 @@ export default function ContractsPage() {
           {/* Analyzed Progress */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-5">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <BarChart3 className="w-5 h-5 text-blue-500" />
+              <div className="w-12 h-12 rounded-lg bg-blue-50 flex items-center justify-center">
+                <DashboardAnalyzed width={44} height={44} />
               </div>
               <span className="text-xs text-[#6B7280]">Progress</span>
             </div>
@@ -415,10 +440,12 @@ export default function ContractsPage() {
                     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 hover:shadow-md transition-shadow h-full flex flex-col">
                       {/* Header with status indicator */}
                       <div className="flex items-start justify-between mb-4">
-                        <div className="w-10 h-10 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
-                          <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                        <div className="w-12 h-12 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
+                          {getContractTypeIllustration(contract.type) || (
+                            <svg className="w-5 h-5 text-[#6B7280]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          )}
                         </div>
                         <div className={`w-2 h-2 rounded-full ${getStatusIndicator(contract.status)}`} />
                       </div>

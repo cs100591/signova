@@ -58,6 +58,14 @@ export {
   ErrorGeneral
 } from './ErrorStates';
 
+// Dashboard Stats
+export {
+  DashboardTotalContracts,
+  DashboardExpiring,
+  DashboardHighRisk,
+  DashboardAnalyzed
+} from './DashboardStats';
+
 // Re-export all as default object
 export { default as EmptyStates } from './EmptyStates';
 export { default as UploadStates } from './UploadStates';
@@ -67,3 +75,4 @@ export { default as PricingPlans } from './PricingPlans';
 export { default as ContractTypes } from './ContractTypes';
 export { default as OnboardingSteps } from './OnboardingSteps';
 export { default as ErrorStates } from './ErrorStates';
+export { default as DashboardStats } from './DashboardStats';
