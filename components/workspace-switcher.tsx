@@ -80,14 +80,19 @@ export default function WorkspaceSwitcher() {
     setError(null);
 
     try {
+      console.log("[WorkspaceSwitcher] Creating workspace:", newWorkspaceName.trim());
+      
       const res = await fetch("/api/workspaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newWorkspaceName.trim() }),
       });
 
+      console.log("[WorkspaceSwitcher] Response status:", res.status, res.statusText);
+
       if (res.ok) {
         const newWs = await res.json();
+        console.log("[WorkspaceSwitcher] Workspace created:", newWs);
         setWorkspaces((prev) => [...prev, newWs]);
         setActiveWorkspaceId(newWs.id);
         localStorage.setItem("activeWorkspaceId", newWs.id);
@@ -95,11 +100,20 @@ export default function WorkspaceSwitcher() {
         setShowCreateForm(false);
         setIsOpen(false);
       } else {
-        const data = await res.json();
-        setError(data.error || "Failed to create workspace");
+        let errorMsg = "Failed to create workspace";
+        try {
+          const data = await res.json();
+          errorMsg = data.error || data.message || errorMsg;
+        } catch (e) {
+          const text = await res.text();
+          errorMsg = text.substring(0, 100) || errorMsg;
+        }
+        console.error("[WorkspaceSwitcher] Create failed:", errorMsg);
+        setError(errorMsg);
       }
-    } catch (err) {
-      setError("Network error. Please try again.");
+    } catch (err: any) {
+      console.error("[WorkspaceSwitcher] Network error:", err);
+      setError(`Network error: ${err?.message || "Please check your connection"}`);
     } finally {
       setCreating(false);
     }
@@ -226,7 +240,9 @@ export default function WorkspaceSwitcher() {
               {!showCreateForm ? (
                 <button
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
+                    console.log("[WorkspaceSwitcher] Opening create form");
                     setShowCreateForm(true);
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#F3F4F6] transition-colors"
@@ -237,7 +253,7 @@ export default function WorkspaceSwitcher() {
                   <span className="text-sm text-[#374151]">Create New Workspace</span>
                 </button>
               ) : (
-                <div className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                <div className="px-3 py-2">
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="text"

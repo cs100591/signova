@@ -130,8 +130,23 @@ export default function ConfirmPage() {
       });
       
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to save");
+        // Try to parse error response
+        let errorMessage = `Server error: ${res.status} ${res.statusText}`;
+        try {
+          const contentType = res.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await res.json();
+            errorMessage = errorData.error || errorData.details || errorMessage;
+            console.error('[Confirm] API Error:', errorData);
+          } else {
+            const text = await res.text();
+            console.error('[Confirm] API Error (non-JSON):', text);
+            errorMessage = text || errorMessage;
+          }
+        } catch (parseError) {
+          console.error('[Confirm] Failed to parse error:', parseError);
+        }
+        throw new Error(errorMessage);
       }
       
       // Clear localStorage
@@ -140,8 +155,8 @@ export default function ConfirmPage() {
       // Redirect to contracts list
       router.push("/contracts");
     } catch (error: any) {
-      console.error("Save error:", error);
-      alert(`Failed to save contract: ${error.message || "Unknown error"}. Please check console for details.`);
+      console.error('[Confirm] Save error:', error);
+      alert(`Failed to save contract: ${error.message || "Unknown error"}`);
       setSaving(false);
     }
   };
@@ -384,7 +399,7 @@ export default function ConfirmPage() {
               Cancel
             </Button>
             <Button
-              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium transition-all duration-200 ease-in-out disabled:opacity-70"
+              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium duration-200 ease-in-out disabled:opacity-70"
               onClick={handleSave}
               disabled={saving}
             >
