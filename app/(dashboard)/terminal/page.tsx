@@ -1,18 +1,44 @@
-"use client";
+'use client';
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Send, Loader2, FileText, Plus, Trash2, History, MessageSquare, Upload, ChevronDown, X } from "lucide-react";
+import { Send, FileText, Plus, Trash2, History, MessageSquare, Upload, ChevronDown, X } from "lucide-react";
 import { supabaseClient } from "@/lib/supabase";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  WaitingRobot, 
+  ThinkingRobot 
+} from "@/components/illustrations/RobotIllustrations";
+import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
+import { RiskScoreCard } from "@/components/terminal/RiskScoreCard";
+import { FindingCards } from "@/components/terminal/FindingCards";
+import { MarkdownMessage } from "@/components/terminal/MarkdownMessage";
 
+// Message types
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  type?: "text" | "analysis";
+  analysisResult?: AnalysisResult;
   timestamp: Date;
-  isTyping?: boolean;
-  displayContent?: string; // For typewriter effect
+}
+
+interface AnalysisResult {
+  riskScore: number;
+  riskVerdict: string;
+  findings: Finding[];
+  missing: string[];
+  summary: string[];
+}
+
+interface Finding {
+  category: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  title: string;
+  issue: string;
+  quote: string;
+  explanation: string;
+  suggestion: string;
 }
 
 interface ChatSession {
@@ -36,156 +62,7 @@ const QUICK_QUESTIONS = [
   "Is this contract standard?",
   "How can I negotiate this?",
   "What's missing from this contract?",
-  "What are the termination conditions?",
-  "Explain the payment terms",
-  "What is the governing law?",
-  "Summarize the key obligations",
 ];
-
-const GENERAL_QUESTIONS = [
-  "What should I look for in an NDA?",
-  "Is this termination clause fair?",
-  "Explain liability clauses",
-  "What are standard payment terms?",
-  "How do I negotiate an MSA?",
-  "What is governing law?",
-  "Explain IP ownership clauses",
-  "What should a service agreement include?",
-];
-
-// Braille spinner characters for Homebrew-style loading
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-
-// Loading messages that cycle like Homebrew
-const LOADING_MESSAGES = [
-  "Analyzing contract structure...",
-  "Checking termination clauses...",
-  "Comparing to industry standards...",
-  "Reviewing liability terms...",
-  "Evaluating payment conditions...",
-  "Cross-referencing legal standards...",
-  "Generating response...",
-];
-
-// Homebrew-style loading indicator
-function HomebrewLoadingIndicator() {
-  const [frame, setFrame] = useState(0);
-  const [messageIndex, setMessageIndex] = useState(0);
-
-  useEffect(() => {
-    const frameInterval = setInterval(() => {
-      setFrame((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, 80);
-
-    const messageInterval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
-    }, 2000);
-
-    return () => {
-      clearInterval(frameInterval);
-      clearInterval(messageInterval);
-    };
-  }, []);
-
-  return (
-    <div className="flex justify-start">
-      <div className="bg-[#1A1A1A] text-white px-4 py-3 rounded-2xl font-mono text-sm">
-        <div className="flex items-center gap-3">
-          <span className="text-[#F59E0B] w-4 text-center">{SPINNER_FRAMES[frame]}</span>
-          <span>{LOADING_MESSAGES[messageIndex]}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Typewriter message component with Markdown support
-function TypewriterMessage({ 
-  content, 
-  isComplete, 
-  onComplete 
-}: { 
-  content: string; 
-  isComplete: boolean; 
-  onComplete: () => void;
-}) {
-  const [displayText, setDisplayText] = useState(isComplete ? content : "");
-  const [showCursor, setShowCursor] = useState(!isComplete);
-
-  useEffect(() => {
-    if (isComplete) {
-      setDisplayText(content);
-      setShowCursor(false);
-      return;
-    }
-
-    let currentIndex = 0;
-    const interval = setInterval(() => {
-      if (currentIndex < content.length) {
-        setDisplayText(content.slice(0, currentIndex + 1));
-        currentIndex++;
-      } else {
-        clearInterval(interval);
-        setShowCursor(false);
-        onComplete();
-      }
-    }, 30); // 30ms per character
-
-    return () => clearInterval(interval);
-  }, [content, isComplete, onComplete]);
-
-  // Cursor blink effect
-  useEffect(() => {
-    if (!showCursor) return;
-    
-    const blinkInterval = setInterval(() => {
-      // Cursor blinking handled by CSS
-    }, 530);
-    
-    return () => clearInterval(blinkInterval);
-  }, [showCursor]);
-
-  return (
-    <div className="text-[15px] leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-      <ReactMarkdown 
-        remarkPlugins={[remarkGfm]}
-        components={{
-          // Custom styling for markdown elements
-          h1: ({children}) => <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>,
-          h2: ({children}) => <h2 className="text-base font-semibold mt-3 mb-2">{children}</h2>,
-          h3: ({children}) => <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>,
-          p: ({children}) => <p className="mb-2 last:mb-0">{children}</p>,
-          ul: ({children}) => <ul className="list-disc pl-4 mb-2 space-y-1">{children}</ul>,
-          ol: ({children}) => <ol className="list-decimal pl-4 mb-2 space-y-1">{children}</ol>,
-          li: ({children}) => <li className="ml-2">{children}</li>,
-          code: ({children, className}) => {
-            const isInline = !className;
-            return isInline ? (
-              <code className="bg-[#F3F4F6] px-1.5 py-0.5 rounded text-sm font-mono">
-                {children}
-              </code>
-            ) : (
-              <pre className="bg-[#1A1A1A] text-white p-3 rounded-lg overflow-x-auto my-2">
-                <code className="text-sm font-mono">{children}</code>
-              </pre>
-            );
-          },
-          blockquote: ({children}) => (
-            <blockquote className="border-l-4 border-[#F59E0B] pl-3 italic my-2 text-[#6B7280]">
-              {children}
-            </blockquote>
-          ),
-          strong: ({children}) => <strong className="font-semibold text-[#1A1A1A]">{children}</strong>,
-        }}
-      >
-        {displayText}
-      </ReactMarkdown>
-      {showCursor && (
-        <span className="inline-block w-2 h-4 bg-[#F59E0B] ml-0.5 animate-pulse" />
-      )}
-    </div>
-  );
-}
 
 export default function TerminalPage() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -200,182 +77,136 @@ export default function TerminalPage() {
   const [showContractDropdown, setShowContractDropdown] = useState(false);
   const [loadingContracts, setLoadingContracts] = useState(false);
   const [inputMode, setInputMode] = useState<"paste" | "saved" | "upload">("paste");
-  const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
 
-  // Load chat history from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("terminalChatHistory");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setChatHistory(
-          parsed.map((chat: any) => ({
-            ...chat,
-            createdAt: new Date(chat.createdAt),
-            messages: chat.messages.map((m: any) => ({
-              ...m,
-              timestamp: new Date(m.timestamp),
-            })),
-          }))
-        );
-      } catch (e) {
-        console.error("Failed to load chat history:", e);
-      }
-    }
-
-    // Load saved contracts from Supabase
-    loadSavedContracts();
-  }, []);
-
-  const loadSavedContracts = async () => {
-    setLoadingContracts(true);
-    try {
-      const { data: { user } } = await supabaseClient.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabaseClient
-        .from("contracts")
-        .select("id, name, type, summary, extracted_text")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (!error && data) {
-        setSavedContracts(data);
-      }
-    } catch (e) {
-      console.error("Failed to load saved contracts:", e);
-    } finally {
-      setLoadingContracts(false);
-    }
-  };
-
-  const saveChatHistory = (newMessages: Message[], contract?: string) => {
-    if (newMessages.length === 0) return;
-
-    const title =
-      newMessages[0].content.slice(0, 50) +
-      (newMessages[0].content.length > 50 ? "..." : "");
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title,
-      messages: newMessages,
-      contractText: contract,
-      createdAt: new Date(),
-    };
-
-    const updated = [newSession, ...chatHistory].slice(0, 20);
-    setChatHistory(updated);
-    localStorage.setItem("terminalChatHistory", JSON.stringify(updated));
-  };
-
+  // Scroll to bottom
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, typingMessageId]);
+  }, [messages, isAnalyzing]);
 
-  const handleSendMessage = async (question: string) => {
-    if (!question.trim()) return;
+  // Handle sending message
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isAnalyzing) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: question,
+      content: text,
       timestamp: new Date(),
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    setMessages(prev => [...prev, userMessage]);
     setInputText("");
+    setShowContractInput(false);
     setIsAnalyzing(true);
 
+    // Check if this is a contract analysis request
+    if (contractText) {
+      // Start analysis flow
+      await startContractAnalysis();
+    } else {
+      // Regular chat
+      await handleRegularChat(text);
+    }
+  };
+
+  // Contract analysis flow
+  const startContractAnalysis = async () => {
     try {
-      const res = await fetch("/api/terminal/chat", {
+      const response = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          question,
-          contractText: contractText || undefined,
-          history: messages.slice(-6),
+          contractText,
+          userCountry: "United States", // Should come from user profile
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to get response");
+      if (!response.ok) throw new Error("Analysis failed");
 
-      const data = await res.json();
-
+      const result: AnalysisResult = await response.json();
+      setAnalysisResult(result);
+      setAnalysisComplete(true);
+      
+      // Add analysis result as a message
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.response,
+        content: "Analysis complete",
+        type: "analysis",
+        analysisResult: result,
         timestamp: new Date(),
       };
-
-      const finalMessages = [...updatedMessages, assistantMessage];
-      setMessages(finalMessages);
-      setTypingMessageId(assistantMessage.id);
-      saveChatHistory(finalMessages, contractText);
+      
+      setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Chat error:", error);
-
+      console.error("Analysis error:", error);
+      // Add error message
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: "I apologize, but I encountered an error processing your request. Please try again.",
+        content: "Sorry, I encountered an error analyzing the contract. Please try again.",
         timestamp: new Date(),
       };
-
-      setMessages([...updatedMessages, errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleTypingComplete = useCallback((messageId: string) => {
-    if (typingMessageId === messageId) {
-      setTypingMessageId(null);
+  // Regular chat flow
+  const handleRegularChat = async (text: string) => {
+    try {
+      const response = await fetch("/api/terminal/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: text,
+          contractText: contractText || undefined,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Chat failed");
+
+      const data = await response.json();
+      
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.response,
+        type: "text",
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Chat error:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, I encountered an error. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsAnalyzing(false);
     }
-  }, [typingMessageId]);
-
-  // Rest of the component continues...
-  // When user clicks "Analyze Contract" - starts chat with contract loaded
-  const handleAnalyzeContract = async () => {
-    if (!contractText.trim()) return;
-
-    setShowContractInput(false);
-
-    // Ask user's first question or default to analysis prompt
-    const firstQuestion = inputText.trim() || "Please analyze this contract and identify key terms, risks, and what I should be aware of before signing.";
-
-    await handleSendMessage(firstQuestion);
   };
 
-  // Select from saved contracts
-  const handleSelectContract = (contract: SavedContract) => {
-    const text = contract.extracted_text || contract.summary || `Contract: ${contract.name} (${contract.type})`;
-    setContractText(text);
-    setContractName(contract.name);
-    setShowContractDropdown(false);
-    setInputMode("saved");
-  };
-
-  // Upload a text/PDF file directly
+  // Handle file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.name.endsWith(".txt")) {
-      const text = await file.text();
-      setContractText(text);
-      setContractName(file.name);
-      setInputMode("upload");
-    } else if (file.name.endsWith(".pdf")) {
-      // For PDFs, upload to the extract endpoint
+    if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+      // Handle PDF upload
       const formData = new FormData();
       formData.append("file", file);
 
@@ -383,128 +214,141 @@ export default function TerminalPage() {
         setIsAnalyzing(true);
         const res = await fetch("/api/upload", { method: "POST", body: formData });
         const data = await res.json();
+        
         if (data.success && data.metadata) {
-          // Use the summary as text context
-          const text = [
-            data.metadata.title && `Title: ${data.metadata.title}`,
-            data.metadata.type && `Type: ${data.metadata.type}`,
-            data.metadata.summary && `Summary: ${data.metadata.summary}`,
-            data.metadata.parties?.party_a && `Party A: ${data.metadata.parties.party_a}`,
-            data.metadata.parties?.party_b && `Party B: ${data.metadata.parties.party_b}`,
-            data.metadata.dates?.effective_date && `Effective: ${data.metadata.dates.effective_date}`,
-            data.metadata.dates?.expiry_date && `Expires: ${data.metadata.dates.expiry_date}`,
-            data.metadata.risk_preview && `Risk Preview: ${data.metadata.risk_preview}`,
-          ].filter(Boolean).join("\n");
-          setContractText(text);
+          setContractText(data.extractedText || JSON.stringify(data.metadata, null, 2));
           setContractName(file.name);
           setInputMode("upload");
+          setShowContractInput(false);
+          
+          // Start analysis
+          await startContractAnalysis();
         } else {
-          alert(data.details || "Could not extract text from PDF. Please try a .txt file.");
+          alert(data.details || "Could not extract text from PDF.");
         }
       } catch (err) {
-        alert("Failed to process PDF. Please try a .txt file instead.");
+        alert("Failed to process PDF.");
       } finally {
         setIsAnalyzing(false);
       }
-    } else {
-      alert("Please upload a .txt or .pdf file.");
+    } else if (file.type.startsWith("text/") || file.name.endsWith(".txt")) {
+      const text = await file.text();
+      setContractText(text);
+      setContractName(file.name);
+      setInputMode("upload");
     }
 
-    // Reset input
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleQuickQuestion = (question: string) => {
-    setShowContractInput(false);
-    handleSendMessage(question);
-  };
+  // Render analysis state with new components
+  const renderAnalysisState = () => {
+    if (!isAnalyzing && !analysisComplete) return null;
 
-  const startNewChat = () => {
-    setMessages([]);
-    setContractText("");
-    setContractName("");
-    setInputText("");
-    setShowContractInput(true);
-    setInputMode("paste");
-    setTypingMessageId(null);
-  };
+    return (
+      <div className="max-w-2xl mx-auto space-y-6 py-8">
+        {/* Step 1: Terminal Animation */}
+        <AnimatePresence>
+          {isAnalyzing && !analysisComplete && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex flex-col items-center"
+            >
+              <ThinkingRobot size={180} className="mb-6" />
+              <AnalysisTerminal 
+                isActive={true} 
+                onComplete={() => {}} 
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-  const loadChat = (session: ChatSession) => {
-    setMessages(session.messages);
-    setContractText(session.contractText || "");
-    setShowContractInput(false);
-    setShowHistory(false);
-    setTypingMessageId(null);
-  };
+        {/* Step 2: Risk Score Card */}
+        <AnimatePresence>
+          {analysisComplete && analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <RiskScoreCard 
+                score={analysisResult.riskScore}
+                verdict={analysisResult.riskVerdict}
+                isVisible={true}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-  const deleteChat = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = chatHistory.filter((chat) => chat.id !== id);
-    setChatHistory(updated);
-    localStorage.setItem("terminalChatHistory", JSON.stringify(updated));
+        {/* Step 3: Finding Cards */}
+        <AnimatePresence>
+          {analysisComplete && analysisResult && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <FindingCards 
+                findings={analysisResult.findings}
+                isVisible={true}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Step 4: Key Takeaways */}
+        <AnimatePresence>
+          {analysisComplete && analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1 }}
+              className="bg-white border border-[#e0d9ce] rounded-xl p-5"
+            >
+              <h3 className="text-sm font-medium text-[#1a1714] mb-3">
+                Key Takeaways
+              </h3>
+              <ul className="space-y-2">
+                {analysisResult.summary.map((point, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm text-[#3a3530]">
+                    <span className="text-[#c8873a] mt-0.5">•</span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Disclaimer */}
+        {analysisComplete && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2 }}
+            className="text-center text-xs text-[#9a8f82] pt-4"
+          >
+            ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
+          </motion.p>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="flex h-full bg-[#F8F7F4]">
-      {/* Sidebar - Chat History */}
-      {showHistory && (
-        <div className="w-72 bg-white border-r border-[#E5E7EB] flex flex-col">
-          <div className="p-4 border-b border-[#E5E7EB]">
-            <h3 className="font-semibold text-[#1A1A1A] flex items-center gap-2">
-              <History className="w-4 h-4" />
-              Chat History
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {chatHistory.length === 0 ? (
-              <p className="p-4 text-sm text-[#9CA3AF] text-center">
-                No chat history yet
-              </p>
-            ) : (
-              chatHistory.map((chat) => (
-                <div
-                  key={chat.id}
-                  onClick={() => loadChat(chat)}
-                  className="p-3 border-b border-[#F3F4F6] hover:bg-[#F9FAFB] cursor-pointer group"
-                >
-                  <div className="flex items-start justify-between">
-                    <p className="text-sm text-[#374151] line-clamp-2 flex-1 mr-2">
-                      {chat.title}
-                    </p>
-                    <button
-                      onClick={(e) => deleteChat(chat.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 className="w-3 h-3 text-red-400" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-[#9CA3AF] mt-1">
-                    {chat.createdAt.toLocaleDateString()}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-
-          <button
-            onClick={() => setShowHistory(false)}
-            className="p-4 text-sm text-[#6B7280] hover:text-[#1A1A1A] border-t border-[#E5E7EB]"
-          >
-            Close History
-          </button>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
         <div className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div>
-            <h1 className="text-xl font-semibold text-[#1A1A1A]">AI Legal Assistant</h1>
+            <h1 className="text-xl font-semibold text-[#1A1A1A]">
+              AI Legal Assistant
+            </h1>
             <p className="text-sm text-[#6B7280]">
               {contractText
-                ? `Analyzing: ${contractName || "contract"} — ask anything about it`
+                ? `Analyzing: ${contractName || "contract"}`
                 : "Ask legal questions or load a contract for analysis"}
             </p>
           </div>
@@ -519,7 +363,14 @@ export default function TerminalPage() {
             </button>
 
             <button
-              onClick={startNewChat}
+              onClick={() => {
+                setMessages([]);
+                setContractText("");
+                setContractName("");
+                setShowContractInput(true);
+                setAnalysisComplete(false);
+                setAnalysisResult(null);
+              }}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-[#1A1A1A] text-white rounded-lg hover:bg-[#333] transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -528,7 +379,7 @@ export default function TerminalPage() {
           </div>
         </div>
 
-        {/* Contract Input (shown initially) */}
+        {/* Contract Input */}
         {showContractInput && (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-4xl mx-auto">
@@ -540,17 +391,16 @@ export default function TerminalPage() {
                   <div>
                     <h3 className="font-semibold text-[#1A1A1A]">Load a Contract</h3>
                     <p className="text-sm text-[#6B7280]">
-                      Choose how you want to provide the contract
+                      Upload a PDF or paste contract text
                     </p>
                   </div>
                 </div>
 
-                {/* Input mode tabs */}
+                {/* Input Mode Tabs */}
                 <div className="flex gap-2 mb-5">
                   {[
                     { id: "paste", label: "Paste Text" },
-                    { id: "saved", label: "Saved Contracts" },
-                    { id: "upload", label: "Upload File" },
+                    { id: "upload", label: "Upload PDF" },
                   ].map((mode) => (
                     <button
                       key={mode.id}
@@ -566,7 +416,7 @@ export default function TerminalPage() {
                   ))}
                 </div>
 
-                {/* Paste text mode */}
+                {/* Paste Text Mode */}
                 {inputMode === "paste" && (
                   <textarea
                     value={contractText}
@@ -577,68 +427,7 @@ export default function TerminalPage() {
                   />
                 )}
 
-                {/* Saved contracts mode */}
-                {inputMode === "saved" && (
-                  <div>
-                    {loadingContracts ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-5 h-5 animate-spin text-[#9CA3AF]" />
-                      </div>
-                    ) : savedContracts.length === 0 ? (
-                      <div className="text-center py-8 text-[#9CA3AF]">
-                        <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                        <p className="text-sm">No saved contracts found.</p>
-                        <p className="text-xs mt-1">Upload a contract first from the Contracts page.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {savedContracts.map((contract) => (
-                          <button
-                            key={contract.id}
-                            onClick={() => handleSelectContract(contract)}
-                            className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${
-                              contractName === contract.name
-                                ? "border-[#F59E0B] bg-[#FEF3C7]/30"
-                                : "border-[#E5E7EB] hover:border-[#F59E0B] hover:bg-[#FEF3C7]/20"
-                            }`}
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-[#F3F4F6] flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-4 h-4 text-[#9CA3AF]" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-[#1A1A1A] text-sm truncate">
-                                {contract.name}
-                              </p>
-                              <p className="text-xs text-[#9CA3AF] truncate">
-                                {contract.type}
-                                {contract.summary && ` — ${contract.summary.slice(0, 60)}...`}
-                              </p>
-                            </div>
-                            {contractName === contract.name && (
-                              <span className="text-[#F59E0B] text-xs font-medium flex-shrink-0">Selected</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {contractName && (
-                      <div className="mt-3 p-2 bg-[#FEF3C7]/50 rounded-lg flex items-center justify-between">
-                        <span className="text-sm text-[#B45309] flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5" />
-                          {contractName} selected
-                        </span>
-                        <button
-                          onClick={() => { setContractText(""); setContractName(""); }}
-                          className="text-xs text-[#9CA3AF] hover:text-red-500"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Upload file mode */}
+                {/* Upload Mode */}
                 {inputMode === "upload" && (
                   <div>
                     <div
@@ -647,42 +436,23 @@ export default function TerminalPage() {
                     >
                       <Upload className="w-8 h-8 mx-auto mb-3 text-[#9CA3AF]" />
                       <p className="font-medium text-[#374151]">
-                        Click to upload a contract
+                        Click to upload a PDF
                       </p>
                       <p className="text-sm text-[#9CA3AF] mt-1">
-                        Supports .txt and .pdf files
+                        Supports PDF files
                       </p>
                     </div>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".txt,.pdf"
+                      accept=".pdf,.txt"
                       onChange={handleFileUpload}
                       className="hidden"
                     />
-                    {isAnalyzing && (
-                      <div className="flex items-center gap-2 mt-3 text-sm text-[#6B7280]">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Extracting text from PDF...
-                      </div>
-                    )}
-                    {contractName && !isAnalyzing && (
-                      <div className="mt-3 p-2 bg-[#FEF3C7]/50 rounded-lg flex items-center justify-between">
-                        <span className="text-sm text-[#B45309] flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5" />
-                          {contractName} loaded
-                        </span>
-                        <button
-                          onClick={() => { setContractText(""); setContractName(""); }}
-                          className="text-xs text-[#9CA3AF] hover:text-red-500"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 
+                {/* Action Buttons */}
                 <div className="flex items-center justify-between mt-5">
                   <button
                     onClick={() => setShowContractInput(false)}
@@ -693,57 +463,41 @@ export default function TerminalPage() {
 
                   {contractText.trim() && (
                     <button
-                      onClick={handleAnalyzeContract}
+                      onClick={() => handleSendMessage("Please analyze this contract")}
                       disabled={isAnalyzing}
                       className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                      {isAnalyzing ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <MessageSquare className="w-4 h-4" />
-                          Analyze Contract
-                        </>
-                      )}
+                      <MessageSquare className="w-4 h-4" />
+                      Analyze Contract
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Quick Questions (general) */}
-              <div className="mt-8">
-                <h3 className="text-sm font-medium text-[#6B7280] mb-4">
-                  Popular Legal Questions
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {GENERAL_QUESTIONS.map((question, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleQuickQuestion(question)}
-                      className="p-3 text-left text-sm bg-white border border-[#E5E7EB] rounded-lg hover:border-[#F59E0B] hover:bg-[#FEF3C7]/30 transition-all"
-                    >
-                      {question}
-                    </button>
-                  ))}
+              {/* Empty State with Robot */}
+              {!contractText && (
+                <div className="mt-12 flex flex-col items-center">
+                  <WaitingRobot size={160} />
+                  <h3 className="text-lg font-semibold text-[#1a1714] mt-4 mb-2">
+                    AI Contract Analysis
+                  </h3>
+                  <p className="text-sm text-[#9a8f82] text-center max-w-sm">
+                    Upload a contract or ask me anything about legal matters
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Chat Interface */}
+        {/* Chat/Analysis Interface */}
         {!showContractInput && (
           <>
             <div className="flex-1 overflow-y-auto p-6 min-h-0">
-              {messages.length === 0 ? (
+              {messages.length === 0 && !isAnalyzing && !analysisComplete ? (
                 <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
-                  <div className="w-16 h-16 rounded-full bg-[#F3F4F6] flex items-center justify-center mb-4">
-                    <MessageSquare className="w-8 h-8 text-[#9CA3AF]" />
-                  </div>
-                  <h3 className="text-lg font-medium text-[#1A1A1A] mb-2">
+                  <WaitingRobot size={120} />
+                  <h3 className="text-lg font-medium text-[#1A1A1A] mt-4 mb-2">
                     How can I help you today?
                   </h3>
                   <p className="text-sm text-[#6B7280]">
@@ -751,24 +505,10 @@ export default function TerminalPage() {
                       ? "Ask me anything about your contract"
                       : "Ask legal questions or load a contract"}
                   </p>
-
-                  {/* Quick chip questions when contract is loaded */}
-                  {contractText && (
-                    <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                      {QUICK_QUESTIONS.map((q, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleSendMessage(q)}
-                          className="px-3 py-1.5 text-xs bg-white border border-[#E5E7EB] rounded-full hover:border-[#F59E0B] hover:bg-[#FEF3C7]/30 transition-all text-[#374151]"
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="max-w-3xl mx-auto space-y-6">
+                  {/* Messages */}
                   {messages.map((message) => (
                     <div
                       key={message.id}
@@ -783,18 +523,11 @@ export default function TerminalPage() {
                             : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
                         }`}
                       >
-                        {message.role === "assistant" && message.id === typingMessageId ? (
-                          <TypewriterMessage
-                            content={message.content}
-                            isComplete={false}
-                            onComplete={() => handleTypingComplete(message.id)}
-                          />
+                        {message.type === "analysis" ? (
+                          // Analysis results are rendered separately below
+                          <div className="text-sm">Analysis complete ✓</div>
                         ) : (
-                          <div className="text-[15px] leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {message.content}
-                            </ReactMarkdown>
-                          </div>
+                          <MarkdownMessage content={message.content} />
                         )}
                         <div
                           className={`text-xs mt-2 ${
@@ -812,7 +545,8 @@ export default function TerminalPage() {
                     </div>
                   ))}
 
-                  {isAnalyzing && <HomebrewLoadingIndicator />}
+                  {/* Analysis State */}
+                  {renderAnalysisState()}
 
                   <div ref={messagesEndRef} />
                 </div>
@@ -837,10 +571,10 @@ export default function TerminalPage() {
                 </div>
               )}
 
-              {/* Quick chips in chat mode (only when contract loaded and messages exist) */}
-              {contractText && messages.length > 0 && (
+              {/* Quick Questions */}
+              {contractText && messages.length > 0 && !isAnalyzing && (
                 <div className="max-w-3xl mx-auto mb-3 flex flex-wrap gap-2">
-                  {QUICK_QUESTIONS.slice(0, 4).map((q, idx) => (
+                  {QUICK_QUESTIONS.map((q, idx) => (
                     <button
                       key={idx}
                       onClick={() => handleSendMessage(q)}
