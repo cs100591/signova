@@ -18,7 +18,10 @@ test.describe('Contracts List - Basic', () => {
   });
 
   test('contracts API should require auth', async ({ page }) => {
-    // Test API directly
+    // Navigate to a page first to establish origin
+    await page.goto('/');
+    
+    // Test API directly - Playwright will handle the base URL
     const response = await page.evaluate(async () => {
       const res = await fetch('/api/contracts');
       return { status: res.status };
