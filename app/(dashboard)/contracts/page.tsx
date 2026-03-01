@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { 
   Plus, 
   SlidersHorizontal, 
@@ -110,6 +111,7 @@ const formatCurrency = (amount: string | null): string => {
 };
 
 export default function ContractsPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("All Contracts");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -129,16 +131,31 @@ export default function ContractsPage() {
         setIsLoading(true);
         setError(null);
         
-        const response = await fetch('/api/contracts');
+        // Add timeout to prevent infinite loading
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch('/api/contracts', {
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.status === 401) {
+          // Redirect to login if not authenticated
+          router.push('/login');
+          return;
+        }
         
         if (!response.ok) {
-          throw new Error('Failed to fetch contracts');
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to fetch contracts: ${response.status}`);
         }
         
         const data = await response.json();
         
         // Transform data to match Contract interface
-        const transformedContracts: Contract[] = data.map((item: any) => ({
+        const transformedContracts: Contract[] = (data || []).map((item: any) => ({
           id: item.id,
           name: item.name || item.title || 'Untitled Contract',
           type: item.type || 'Other',
@@ -154,14 +171,18 @@ export default function ContractsPage() {
         setContracts(transformedContracts);
       } catch (err: any) {
         console.error('Error fetching contracts:', err);
-        setError(err.message || 'Failed to load contracts');
+        if (err.name === 'AbortError') {
+          setError('Request timed out. Please try again.');
+        } else {
+          setError(err.message || 'Failed to load contracts');
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchContracts();
-  }, []);
+  }, [router]);
 
   // Filter contracts
   const filteredContracts = useMemo(() => {
@@ -258,12 +279,19 @@ export default function ContractsPage() {
         <div className="text-center max-w-md">
           <div className="text-red-500 mb-4 text-lg">⚠️ Error loading contracts</div>
           <p className="text-[#6B7280] mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-[#F59E0B] text-white rounded-lg hover:bg-[#D97706]"
-          >
-            Retry
-          </button>
+          <div className="flex gap-3 justify-center">
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-[#F59E0B] text-white rounded-lg hover:bg-[#D97706]"
+            >
+              Retry
+            </button>
+            <Link href="/login">
+              <button className="px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F3F4F6]">
+                Go to Login
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
     );
