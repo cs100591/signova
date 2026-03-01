@@ -140,7 +140,7 @@ export default function ConfirmPage() {
       router.push("/contracts");
     } catch (error: any) {
       console.error("Save error:", error);
-      alert(error.message || "Failed to save contract. Please try again.");
+      alert(`Failed to save contract: ${error.message || "Unknown error"}. Please check console for details.`);
       setSaving(false);
     }
   };
@@ -372,32 +372,34 @@ export default function ConfirmPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 mt-8 justify-center">
-          <Button
-            variant="outline"
-            className="px-8 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6]"
-            onClick={() => router.push("/upload")}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button
-            className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Check className="w-4 h-4 mr-2" />
-                Confirm & Save Contract
-              </>
-            )}
-          </Button>
+        <div className="sticky bottom-0 left-0 right-0 bg-[#F8F7F4] border-t border-[#E5E7EB] py-6 px-8 mt-8 -mx-8 z-50">
+          <div className="max-w-[800px] mx-auto flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              className="px-8 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6] bg-white"
+              onClick={() => router.push("/upload")}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Confirm & Save Contract
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
