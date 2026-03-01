@@ -1,0 +1,50 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - link "Signova" [ref=e4] [cursor=pointer]:
+        - /url: /
+    - generic [ref=e6]:
+      - img [ref=e8]
+      - generic [ref=e40]:
+        - button "Sign In" [ref=e41]
+        - button "Create Account" [active] [ref=e42]
+      - generic [ref=e43]:
+        - heading "Create your account" [level=1] [ref=e44]
+        - paragraph [ref=e45]: Start analyzing contracts in seconds
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]: Email
+          - generic [ref=e49]:
+            - img [ref=e50]
+            - textbox "you@example.com" [ref=e53]
+        - generic [ref=e54]:
+          - generic [ref=e55]: Password
+          - generic [ref=e56]:
+            - img [ref=e57]
+            - textbox "••••••••" [ref=e60]
+            - button [ref=e61]:
+              - img [ref=e62]
+        - generic [ref=e65]:
+          - generic [ref=e66]: Confirm Password
+          - generic [ref=e67]:
+            - img [ref=e68]
+            - textbox "••••••••" [ref=e71]
+        - button "Create Account" [ref=e72]:
+          - text: Create Account
+          - img [ref=e73]
+      - paragraph [ref=e75]:
+        - text: By creating an account, you agree to our
+        - link "Terms of Service" [ref=e76] [cursor=pointer]:
+          - /url: "#"
+        - text: and
+        - link "Privacy Policy" [ref=e77] [cursor=pointer]:
+          - /url: "#"
+        - text: .
+    - contentinfo [ref=e78]:
+      - link "← Back to home" [ref=e79] [cursor=pointer]:
+        - /url: /
+  - alert [ref=e80]
+```
