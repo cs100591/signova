@@ -117,8 +117,27 @@ export async function POST(request: Request) {
     
     if (error) {
       console.error('Database error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      
+      // Provide more specific error messages
+      let userMessage = 'Failed to save contract';
+      if (error.code === '42703') {
+        userMessage = 'Database error: Missing required columns. Please contact support.';
+      } else if (error.code === '23502') {
+        userMessage = 'Database error: Missing required field. Please fill in all required fields.';
+      } else if (error.message?.includes('column')) {
+        userMessage = `Database error: ${error.message}. Please run database migrations.`;
+      }
+      
       return NextResponse.json(
-        { error: 'Failed to save contract', details: error.message },
+        { 
+          error: userMessage, 
+          details: error.message,
+          code: error.code,
+          hint: 'Database columns may be missing. Run SQL migrations in Supabase Dashboard.'
+        },
         { status: 500 }
       );
     }

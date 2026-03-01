@@ -83,7 +83,9 @@ Input:
 Output Format (JSON):
   {
     "contract_name": "string",
-    "contract_type": "string", 
+    "contract_type": "string",
+    "party_a": "first party/company name",
+    "party_b": "second party/company name",
     "amount": "string or null",
     "effective_date": "YYYY-MM-DD",
     "expiry_date": "YYYY-MM-DD",
