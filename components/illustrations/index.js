@@ -66,6 +66,16 @@ export {
   DashboardAnalyzed
 } from './DashboardStats';
 
+// Robot Illustrations
+export {
+  RobotWaiting,
+  RobotSelecting,
+  RobotComplete,
+  RobotThinking,
+  RobotFoundRisk,
+  RobotAllClear
+} from './RobotIllustrations';
+
 // Re-export all as default object
 export { default as EmptyStates } from './EmptyStates';
 export { default as UploadStates } from './UploadStates';
@@ -76,3 +86,4 @@ export { default as ContractTypes } from './ContractTypes';
 export { default as OnboardingSteps } from './OnboardingSteps';
 export { default as ErrorStates } from './ErrorStates';
 export { default as DashboardStats } from './DashboardStats';
+export { default as RobotIllustrations } from './RobotIllustrations';

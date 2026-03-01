@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import TerminalAnimation from "@/components/animations/TerminalAnimation";
 import { ResultsView } from "@/components/animations/ResultsAnimation";
-import { AnalysisInProgress } from "@/components/illustrations";
+import { RobotWaiting } from "@/components/illustrations";
 
 // Mock contracts data
 const contracts = [
@@ -130,7 +130,7 @@ export default function TerminalPage() {
       <div className="flex h-full flex-col bg-[#FFFDF8] items-center justify-center p-10">
         <div className="text-center max-w-[500px]">
           <div className="mb-6">
-            <AnalysisInProgress width={200} height={200} className="mx-auto" />
+            <RobotWaiting width={160} height={160} className="mx-auto" />
           </div>
 
           <h2 className="text-2xl font-semibold text-[#1A1A1A] mb-3">
