@@ -35,7 +35,7 @@ export async function POST(request: Request) {
             issue: 'There is no limit on your total financial liability under this contract.',
             quote: 'Party B shall be liable for all damages arising from breach of this Agreement.',
             explanation: 'Without a liability cap, you could owe unlimited damages even for minor mistakes. Most standard contracts cap liability at the contract value or 12 months of fees.',
-            suggestion: 'Add: "In no event shall either party's total liability exceed the fees paid in the 12 months preceding the claim."',
+            suggestion: "Add: \"In no event shall either party's total liability exceed the fees paid in the 12 months preceding the claim.\"",
           },
         ],
         missing: [
