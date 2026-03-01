@@ -70,11 +70,11 @@ export async function POST(request: Request) {
     
     try {
       const fileBuffer = await readFile(filePath);
-      const result = await processFile(fileBuffer, mimeType);
+      const result = await processFile(fileBuffer, mimeType, file.name);
       
       extractedText = result.text;
       isScanned = result.isScanned;
-      ocrStatus = isScanned ? 'ocr_complete' : 'text_extracted';
+      ocrStatus = result.ocrSource === 'openrouter' ? 'ocr_openrouter' : (isScanned ? 'ocr_complete' : 'text_extracted');
       
       // Limit text length to prevent token overflow (max ~8000 chars)
       if (extractedText.length > 8000) {
