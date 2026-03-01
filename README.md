@@ -1,36 +1,203 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Signova - AI Contract Companion
 
-## Getting Started
+A minimal, AI-first contract companion that helps humans understand contracts clearly before signing.
 
-First, run the development server:
+## Tech Stack
+
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS + shadcn/ui
+- **Database**: PostgreSQL
+- **AI**: OpenAI API (GPT-4o-mini)
+- **Language**: TypeScript
+
+## Features
+
+✅ **Contract Workspace** - Clean, Notion-style card grid layout  
+✅ **AI Terminal** - Light Console Mode for contract analysis  
+✅ **Contract Upload** - PDF/DOC upload with AI metadata extraction  
+✅ **Contract Detail** - PDF preview + extracted info + notes  
+✅ **AI Analysis Flow** - Phase-based analysis with inline diff suggestions  
+✅ **Two-Role Permission** - Owner/Member simple access control
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+cd signova
+npm install
+```
+
+### 2. Set Up Environment Variables
+
+Create `.env.local`:
+
+```env
+# Database
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/signova"
+
+# AI
+OPENAI_API_KEY="your-openai-api-key"
+
+# App
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret-key"
+```
+
+### 3. Set Up Database
+
+Start PostgreSQL (using Docker):
+
+```bash
+docker run -d \
+  --name signova-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=signova \
+  -p 5432:5432 \
+  postgres:15
+```
+
+Initialize tables:
+
+```sql
+CREATE TABLE workspaces (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  owner_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE contracts (
+  id SERIAL PRIMARY KEY,
+  workspace_id INTEGER REFERENCES workspaces(id),
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(100),
+  amount VARCHAR(100),
+  effective_date DATE,
+  expiry_date DATE,
+  summary TEXT,
+  file_url TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE notes (
+  id SERIAL PRIMARY KEY,
+  contract_id INTEGER REFERENCES contracts(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  created_by VARCHAR(255)
+);
+```
+
+### 4. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Design System
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Workspace Colors
+- Background: `#FFFBF5` (Soft Cream)
+- Cards: `#FFFFFF`
+- Border: `#EFE7DD`
+- Primary: `#F59E0B` (Amber)
+- Text: `#1A1A1A`
 
-## Learn More
+### Terminal Colors
+- Background: `#FAF7F2`
+- Font: JetBrains Mono
+- Accent: `#F59E0B`
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+/app
+  /(dashboard)/         # Group route for dashboard layout
+    /contracts/page.tsx  # Contract library (card grid)
+    /terminal/page.tsx   # AI Terminal (Light Console Mode)
+    /upload/page.tsx     # Upload flow
+    /extracting/page.tsx # AI extraction animation
+    /confirm/page.tsx    # Metadata confirmation
+    layout.tsx           # Dashboard layout with sidebar
+  /api
+    /contracts/route.ts  # CRUD API
+    /upload/route.ts     # File upload + AI extraction
+    /ai/analyze/route.ts # AI analysis endpoint
+/components
+  /ui/                   # shadcn components
+  sidebar.tsx           # Navigation sidebar
+/lib
+  db.ts                 # PostgreSQL connection
+  ai.ts                 # OpenAI integration
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Endpoints
 
-## Deploy on Vercel
+- `GET /api/contracts` - List all contracts
+- `POST /api/contracts` - Create contract
+- `POST /api/upload` - Upload file + AI extraction
+- `POST /api/ai/analyze` - Analyze contract clause
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## AI Prompts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+All AI prompts follow strict template:
+
+```
+Instruction:
+  - Act as a calm AI contract analyst
+  - Do not be academic
+  - Do not produce legal advice
+  - Follow output format rules
+
+Input:
+  - Contract text
+  - User focus area
+
+Output Format:
+  1. What clause says
+  2. Why it matters
+  3. What is typical
+  4. Suggested improvement (inline diff)
+
+Tone: Clear, Human, Not verbose
+```
+
+## Constraints (MVP Only)
+
+✅ Simple 2-role permission (Owner/Member)  
+✅ 4 database tables only  
+✅ No SSO, no analytics, no dashboards  
+✅ No vector DBs or complex AI pipelines  
+✅ Single-turn AI requests (no streaming)
+
+## Deployment
+
+### Build
+
+```bash
+npm run build
+```
+
+### Start Production Server
+
+```bash
+npm start
+```
+
+Or deploy to Vercel:
+
+```bash
+vercel --prod
+```
+
+## License
+
+MIT
+
+## Disclaimer
+
+AI analysis is for informational purposes only. Not legal advice.
