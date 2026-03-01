@@ -15,13 +15,87 @@ const jurisdictions = [
   { region: "Others", countries: ["India", "UAE", "Saudi Arabia", "South Africa", "Nigeria", "Other"] },
 ];
 
+const ContractTypeIcon = ({ id }: { id: string }) => {
+  switch (id) {
+    case "employment":
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="9" r="5.5" stroke="#1a1714" strokeWidth="1.8"/>
+          <path d="M12 14 L16 18 L20 14" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <path d="M16 17 L14.5 22 L16 24 L17.5 22 Z" stroke="#1a1714" strokeWidth="1.3" fill="none" strokeLinejoin="round"/>
+          <path d="M8 30 Q8 23 16 23 Q24 23 24 30" stroke="#1a1714" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+        </svg>
+      );
+    case "freelance":
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M4 13 L4 26 Q4 28 6 28 L26 28 Q28 28 28 26 L28 13 Q28 11 26 11 L6 11 Q4 11 4 13Z" stroke="#1a1714" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
+          <path d="M11 11 L11 8 Q11 5 16 5 Q21 5 21 8 L21 11" stroke="#1a1714" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
+          <path d="M4 18 L28 18" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M12 22 L12 25" stroke="#1a1714" strokeWidth="2.2" strokeLinecap="round"/>
+          <circle cx="12" cy="21" r="2" stroke="#1a1714" strokeWidth="1.3" fill="none"/>
+          <path d="M17 21 L17 25" stroke="#1a1714" strokeWidth="2.2" strokeLinecap="round"/>
+          <path d="M15 21 L19 21" stroke="#1a1714" strokeWidth="1.8" strokeLinecap="round"/>
+          <circle cx="23" cy="23" r="2.5" stroke="#1a1714" strokeWidth="1.3" fill="none"/>
+          <circle cx="23" cy="23" r="1" fill="#1a1714"/>
+          <path d="M23 19.5 L23 18.5" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M23 26.5 L23 27.5" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M19.5 23 L18.5 23" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M26.5 23 L27.5 23" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      );
+    case "business":
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M3 17 Q3 14 6 13 L12 11 L14 14 L16 12 L18 14 L20 11 L26 13 Q29 14 29 17 L26 23 Q23 27 20 25 L16 23 L12 25 Q9 27 6 23 Z" stroke="#1a1714" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
+          <path d="M14 14 L18 14" stroke="#1a1714" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M3 17 L1 21" stroke="#1a1714" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M29 17 L31 21" stroke="#1a1714" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      );
+    case "nda":
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M16 3 L27 7 L27 17 Q27 25 16 30 Q5 25 5 17 L5 7 Z" stroke="#1a1714" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
+          <path d="M12 16 L12 21 L20 21 L20 16 Q20 12 16 12 Q12 12 12 16 Z" stroke="#1a1714" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+          <path d="M13.5 16 L13.5 14 Q13.5 11 16 11 Q18.5 11 18.5 14 L18.5 16" stroke="#1a1714" strokeWidth="1.4" fill="none"/>
+          <circle cx="16" cy="18.5" r="1.3" fill="#1a1714"/>
+        </svg>
+      );
+    case "lease":
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M4 28 L4 14 L16 4 L28 14 L28 28 Z" stroke="#1a1714" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
+          <path d="M2 15 L16 3 L30 15" stroke="#1a1714" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          <path d="M12 28 L12 20 Q12 18 14.5 18 L17.5 18 Q20 18 20 20 L20 28" stroke="#1a1714" strokeWidth="1.4" fill="none" strokeLinejoin="round"/>
+          <circle cx="18.5" cy="24" r="1.2" fill="#1a1714"/>
+          <rect x="7" y="17" width="6" height="5" rx="1.5" stroke="#1a1714" strokeWidth="1.3" fill="none"/>
+          <path d="M10 17 L10 22" stroke="#1a1714" strokeWidth="0.8" opacity="0.5"/>
+          <path d="M7 19.5 L13 19.5" stroke="#1a1714" strokeWidth="0.8" opacity="0.5"/>
+        </svg>
+      );
+    case "other":
+    default:
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27 Z" stroke="#1a1714" strokeWidth="1.8" fill="none" strokeLinejoin="round"/>
+          <path d="M20 5 L20 11 L26 11" stroke="#1a1714" strokeWidth="1.5" fill="none"/>
+          <circle cx="11" cy="19" r="1.5" fill="#1a1714"/>
+          <circle cx="16" cy="19" r="1.5" fill="#1a1714"/>
+          <circle cx="21" cy="19" r="1.5" fill="#1a1714"/>
+          <path d="M10 14 L22 14" stroke="#1a1714" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      );
+  }
+};
+
 const contractTypes = [
-  { id: "employment", label: "Employment contracts", icon: "👔" },
-  { id: "freelance", label: "Freelance / Contractor agreements", icon: "💼" },
-  { id: "business", label: "Business / Vendor agreements", icon: "🤝" },
-  { id: "nda", label: "NDA / Confidentiality", icon: "🔒" },
-  { id: "lease", label: "Lease / Rental", icon: "🏠" },
-  { id: "other", label: "Other", icon: "📄" },
+  { id: "employment", label: "Employment contracts" },
+  { id: "freelance", label: "Freelance / Contractor agreements" },
+  { id: "business", label: "Business / Vendor agreements" },
+  { id: "nda", label: "NDA / Confidentiality" },
+  { id: "lease", label: "Lease / Rental" },
+  { id: "other", label: "Other" },
 ];
 
 const languages = [
@@ -241,7 +315,7 @@ export default function OnboardingPage() {
                         : "bg-white border-[#E5E7EB] hover:border-[#F59E0B]"
                     }`}
                   >
-                    <span className="text-2xl">{type.icon}</span>
+                    <ContractTypeIcon id={type.id} />
                     <span className={`flex-1 text-left font-medium ${
                       formData.contractTypes.includes(type.id) ? "text-[#B45309]" : "text-[#374151]"
                     }`}>

@@ -1,99 +1,159 @@
-import { ImageAnnotatorClient } from "@google-cloud/vision";
-import { extractTextWithOpenRouter } from "./openrouter-ocr";
-
-// Initialize Vision client (optional - only if configured)
-let visionClient: ImageAnnotatorClient | undefined;
-
-try {
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    visionClient = new ImageAnnotatorClient({
-      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-    });
-    console.log("[OCR] Google Vision client initialized");
-  }
-} catch (error) {
-  console.warn("[OCR] Google Vision not configured:", error);
-}
-
 /**
- * Extract text from a text-based PDF using pdf-parse
- * This is the primary method - fast and free, no AI needed
+ * OCR Module - Text extraction from PDFs and images
+ *
+ * Strategy:
+ * 1. PDFs → Send directly to Claude Sonnet as base64 (native PDF support)
+ * 2. Images → Google Vision OCR first, fallback to Claude
  */
-const extractTextFromPDF = async (pdfBuffer: Buffer): Promise<string> => {
+
+// Initialize Vision client (optional)
+let visionClient: any = null;
+
+const initVision = async () => {
+  if (visionClient !== null) return visionClient;
   try {
-    // Dynamically import pdf-parse to avoid issues at module load time
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse");
-    const fn = pdfParse.default ?? pdfParse;
-    const data = await fn(pdfBuffer);
-    return data.text || "";
-  } catch (err: any) {
-    console.warn("[OCR] pdf-parse failed:", err.message);
-    return "";
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const { ImageAnnotatorClient } = await import("@google-cloud/vision");
+      visionClient = new ImageAnnotatorClient({
+        keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      });
+      console.log("[OCR] Google Vision client initialized");
+    } else {
+      visionClient = false; // Mark as unavailable
+    }
+  } catch (err) {
+    console.warn("[OCR] Google Vision not available:", (err as Error).message);
+    visionClient = false;
   }
+  return visionClient;
 };
 
 /**
- * OCR image files (JPG, PNG, WEBP) using Google Vision
+ * Extract text from a PDF using Claude's native PDF vision capability.
+ * Claude can read PDFs directly as base64 documents — no pdf-parse needed.
  */
-export const ocrImage = async (imageBuffer: Buffer): Promise<string> => {
-  if (!visionClient) {
-    throw new Error("OCR service not configured");
+const extractPDFWithClaude = async (pdfBuffer: Buffer): Promise<string> => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+
+  const base64PDF = pdfBuffer.toString("base64");
+
+  console.log("[OCR] Sending PDF to Claude for text extraction...");
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-beta": "pdfs-2024-09-25",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: base64PDF,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract ALL text from this document. Preserve the structure. Return only the extracted text, nothing else.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.error("[OCR] Claude PDF extraction error:", response.status, err.slice(0, 200));
+    throw new Error(`Claude PDF extraction failed: ${response.status}`);
   }
 
-  try {
-    const [result] = await visionClient.documentTextDetection({
-      image: { content: imageBuffer.toString("base64") },
-    });
+  const data = await response.json();
+  const text = data.content?.[0]?.text || "";
 
-    const text = result.fullTextAnnotation?.text || "";
-
-    if (!text || text.trim().length === 0) {
-      throw new Error("No text detected in image");
-    }
-
-    return text;
-  } catch (err: any) {
-    console.error("Google Vision OCR failed:", err.message);
-    throw new Error("Could not read text from image. Please ensure the image is clear and legible.");
-  }
+  console.log(`[OCR] Claude extracted ${text.length} chars from PDF`);
+  return text;
 };
 
 /**
- * Process PDF - tries native text extraction first, then AI OCR for scanned PDFs
+ * OCR image files using Google Vision
  */
-export const processPDF = async (pdfBuffer: Buffer, fileName: string = "document.pdf"): Promise<string> => {
-  console.log("[OCR] Processing PDF...");
+const ocrImageWithVision = async (imageBuffer: Buffer): Promise<string> => {
+  const client = await initVision();
+  if (!client) throw new Error("Google Vision not configured");
 
-  // Step 1: Try native text extraction (fastest, most accurate for text PDFs)
-  const nativeText = await extractTextFromPDF(pdfBuffer);
-  
-  if (nativeText && nativeText.trim().length >= 100) {
-    console.log(`[OCR] Native PDF text extraction successful: ${nativeText.length} chars`);
-    return nativeText;
+  const [result] = await client.documentTextDetection({
+    image: { content: imageBuffer.toString("base64") },
+  });
+
+  const text = result.fullTextAnnotation?.text || "";
+  if (!text || text.trim().length === 0) {
+    throw new Error("No text detected in image");
+  }
+  return text;
+};
+
+/**
+ * Extract text from image using Claude vision
+ */
+const extractImageWithClaude = async (
+  imageBuffer: Buffer,
+  mimeType: string
+): Promise<string> => {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+
+  const base64Image = imageBuffer.toString("base64");
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 4000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: mimeType,
+                data: base64Image,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract ALL text from this image. Preserve the structure. Return only the extracted text, nothing else.",
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Claude image OCR failed: ${response.status}`);
   }
 
-  console.log("[OCR] Native extraction got insufficient text, trying AI OCR...");
-
-  // Step 2: Try OpenRouter AI (for scanned PDFs / image PDFs)
-  try {
-    const result = await extractTextWithOpenRouter(pdfBuffer, "application/pdf", fileName);
-    if (result.text && result.text.trim().length >= 100) {
-      console.log(`[OCR] OpenRouter OCR successful: ${result.text.length} chars`);
-      return result.text;
-    }
-  } catch (err: any) {
-    console.warn("[OCR] OpenRouter OCR failed:", err.message);
-  }
-
-  // If native text was between 50-99 chars, still use it
-  if (nativeText && nativeText.trim().length >= 50) {
-    return nativeText;
-  }
-
-  throw new Error(
-    "Could not extract text from PDF. Please ensure the PDF contains selectable text and is not password-protected. For scanned documents, please upload as an image (JPG/PNG)."
-  );
+  const data = await response.json();
+  return data.content?.[0]?.text || "";
 };
 
 /**
@@ -103,79 +163,74 @@ export const processFile = async (
   fileBuffer: Buffer,
   mimeType: string,
   fileName: string = "document"
-): Promise<{ text: string; isScanned: boolean; ocrSource: "vision" | "openrouter" | "native" }> => {
-  let text = "";
-  let isScanned = false;
-  let ocrSource: "vision" | "openrouter" | "native" = "native";
+): Promise<{
+  text: string;
+  isScanned: boolean;
+  ocrSource: "claude" | "vision" | "openrouter" | "native";
+}> => {
+  console.log(`[OCR] Processing ${fileName} (${mimeType})`);
 
-  try {
-    if (mimeType === "application/pdf") {
-      // PDF: try native first, then AI OCR
-      const nativeText = await extractTextFromPDF(fileBuffer);
-      
-      if (nativeText && nativeText.trim().length >= 100) {
-        text = nativeText;
-        isScanned = false;
-        ocrSource = "native";
-        console.log("[OCR] Processed PDF with native text extraction");
-      } else {
-        // Scanned PDF - try AI OCR
-        try {
-          const result = await extractTextWithOpenRouter(fileBuffer, "application/pdf", fileName);
-          text = result.text;
-          isScanned = true;
-          ocrSource = "openrouter";
-          console.log("[OCR] Processed scanned PDF with OpenRouter");
-        } catch (aiErr: any) {
-          // Use whatever native text we got, even if short
-          if (nativeText && nativeText.trim().length > 0) {
-            text = nativeText;
-            ocrSource = "native";
-          } else {
-            throw new Error(
-              "Could not extract text from this PDF. Please ensure it contains selectable text or upload as JPG/PNG image."
-            );
-          }
-        }
+  if (mimeType === "application/pdf") {
+    // PDFs: use Claude native PDF reading
+    try {
+      const text = await extractPDFWithClaude(fileBuffer);
+      if (text && text.trim().length >= 50) {
+        return { text, isScanned: false, ocrSource: "claude" };
       }
-    } else if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
-      // Images - try Google Vision first, fallback to OpenRouter
-      if (visionClient) {
-        try {
-          text = await ocrImage(fileBuffer);
-          isScanned = true;
-          ocrSource = "vision";
-          console.log("[OCR] Processed image with Google Vision");
-        } catch (visionError: any) {
-          console.warn("[OCR] Google Vision failed, trying OpenRouter:", visionError.message);
-          const result = await extractTextWithOpenRouter(fileBuffer, mimeType, fileName);
-          text = result.text;
-          isScanned = true;
-          ocrSource = "openrouter";
-          console.log("[OCR] Processed image with OpenRouter fallback");
-        }
-      } else {
-        // No Vision client, use OpenRouter directly
+      throw new Error("Insufficient text extracted from PDF");
+    } catch (err: any) {
+      console.error("[OCR] Claude PDF extraction failed:", err.message);
+
+      // Fallback to OpenRouter
+      try {
+        const { extractTextWithOpenRouter } = await import("./openrouter-ocr");
         const result = await extractTextWithOpenRouter(fileBuffer, mimeType, fileName);
-        text = result.text;
-        isScanned = true;
-        ocrSource = "openrouter";
-        console.log("[OCR] Processed image with OpenRouter (no Vision)");
+        if (result.text && result.text.trim().length >= 50) {
+          return { text: result.text, isScanned: true, ocrSource: "openrouter" };
+        }
+      } catch (fallbackErr: any) {
+        console.error("[OCR] OpenRouter fallback also failed:", fallbackErr.message);
       }
-    } else {
-      throw new Error(`Unsupported file type: ${mimeType}`);
-    }
 
-    // Final validation
-    if (!text || text.trim().length < 50) {
       throw new Error(
-        "Could not extract sufficient text from the document. The file may be empty, corrupted, or password-protected."
+        "Could not extract text from this PDF. Please ensure it is not password-protected and contains readable text."
       );
     }
-
-    return { text, isScanned, ocrSource };
-  } catch (error: any) {
-    console.error("[OCR] Processing failed:", error.message);
-    throw error;
   }
+
+  if (["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+    // Images: try Google Vision first, then Claude
+    const client = await initVision();
+    if (client) {
+      try {
+        const text = await ocrImageWithVision(fileBuffer);
+        return { text, isScanned: true, ocrSource: "vision" };
+      } catch (visionErr: any) {
+        console.warn("[OCR] Vision failed, trying Claude:", visionErr.message);
+      }
+    }
+
+    // Claude image fallback
+    const text = await extractImageWithClaude(fileBuffer, mimeType);
+    if (!text || text.trim().length < 50) {
+      throw new Error("Could not extract sufficient text from this image.");
+    }
+    return { text, isScanned: true, ocrSource: "claude" };
+  }
+
+  throw new Error(`Unsupported file type: ${mimeType}`);
+};
+
+// Keep exports for backward compatibility
+export const processPDF = async (
+  pdfBuffer: Buffer,
+  fileName: string = "document.pdf"
+): Promise<string> => {
+  const result = await processFile(pdfBuffer, "application/pdf", fileName);
+  return result.text;
+};
+
+export const ocrImage = async (imageBuffer: Buffer): Promise<string> => {
+  const result = await processFile(imageBuffer, "image/jpeg", "image.jpg");
+  return result.text;
 };

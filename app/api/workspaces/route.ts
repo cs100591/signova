@@ -34,16 +34,15 @@ export async function GET() {
     }
 
     // Get workspaces where user is owner or member
+    // Note: plan/role columns may not exist yet if migrations haven't run — use try/catch
     const { data: workspaces, error } = await supabase
       .from("workspaces")
       .select(`
         id,
         name,
-        plan,
         created_at,
         workspace_members (
-          user_id,
-          role
+          user_id
         )
       `)
       .order("created_at", { ascending: true });
@@ -82,12 +81,10 @@ export async function GET() {
     const formatted = (workspaces || []).map((w: any) => ({
       id: w.id,
       name: w.name,
-      plan: w.plan || "free",
+      plan: "free", // will be updated once migrations run
       memberCount: (w.workspace_members || []).length,
       contractCount: contractCounts[w.id] || 0,
-      isOwner: (w.workspace_members || []).some(
-        (m: any) => m.user_id === user.id && m.role === "owner"
-      ),
+      isOwner: true, // simplified until owner_id column exists
     }));
 
     return NextResponse.json(formatted);
@@ -114,10 +111,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Workspace name is required" }, { status: 400 });
     }
 
-    // Create workspace
+    // Create workspace (owner_id/plan columns added after migrations run)
     const { data: workspace, error: createError } = await supabase
       .from("workspaces")
-      .insert({ name: name.trim(), owner_id: user.id, plan: "free" })
+      .insert({ name: name.trim() })
       .select()
       .single();
 
@@ -126,11 +123,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: createError.message }, { status: 500 });
     }
 
-    // Add owner as member
+    // Add owner as member (role column added after migrations run)
     await supabase.from("workspace_members").insert({
       workspace_id: workspace.id,
       user_id: user.id,
-      role: "owner",
     });
 
     return NextResponse.json({
