@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Globe, FileText, Languages, ChevronRight } from "lucide-react";
+import { supabaseClient } from "@/lib/supabase";
 import { OnboardingLocation, OnboardingContracts, OnboardingLanguage, OnboardingComplete } from "@/components/illustrations";
 
 const jurisdictions = [
@@ -47,6 +48,20 @@ export default function OnboardingPage() {
     language: "EN",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  // Check if user is logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      setUser(user);
+    };
+    checkUser();
+  }, [router]);
 
   const handleCountrySelect = (country: string) => {
     setFormData({ ...formData, country });
@@ -76,23 +91,36 @@ export default function OnboardingPage() {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     
-    // TODO: Save to database
     try {
-      // const response = await fetch('/api/user/profile', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData),
-      // });
+      if (!user) {
+        router.push('/login');
+        return;
+      }
       
-      console.log('Saving user profile:', formData);
+      // Save to Supabase profiles table
+      const { error } = await supabaseClient
+        .from('profiles')
+        .update({
+          country: formData.country,
+          contract_types: formData.contractTypes,
+          preferred_language: formData.language,
+          onboarding_complete: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
       
-      // Save to localStorage for now
-      localStorage.setItem('userProfile', JSON.stringify(formData));
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+      
+      console.log('Profile saved successfully');
       
       // Redirect to contracts page
       router.push('/contracts');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving profile:', error);
+      alert('Failed to save profile: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }

@@ -1,9 +1,4 @@
--- Supabase Database Schema for Signova
--- Run this in Supabase SQL Editor
-
--- Enable Row Level Security
-alter table if exists contracts enable row level security;
-alter table if exists profiles enable row level security;
+-- Supabase Database Schema for Signova (Idempotent Version - Safe to run multiple times)
 
 -- Create contracts table
 CREATE TABLE IF NOT EXISTS contracts (
@@ -39,6 +34,18 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc', NOW())
 );
 
+-- Enable Row Level Security
+ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies first (to avoid conflicts)
+DROP POLICY IF EXISTS "Users can view own contracts" ON contracts;
+DROP POLICY IF EXISTS "Users can insert own contracts" ON contracts;
+DROP POLICY IF EXISTS "Users can update own contracts" ON contracts;
+DROP POLICY IF EXISTS "Users can delete own contracts" ON contracts;
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+
 -- Create RLS policies for contracts
 CREATE POLICY "Users can view own contracts" ON contracts
   FOR SELECT USING (auth.uid() = user_id);
@@ -64,7 +71,8 @@ CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   INSERT INTO profiles (id, email)
-  VALUES (NEW.id, NEW.email);
+  VALUES (NEW.id, NEW.email)
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -94,3 +102,9 @@ DROP TRIGGER IF EXISTS update_profiles_updated_at ON profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Grant permissions
+GRANT ALL ON contracts TO authenticated;
+GRANT ALL ON contracts TO service_role;
+GRANT ALL ON profiles TO authenticated;
+GRANT ALL ON profiles TO service_role;
