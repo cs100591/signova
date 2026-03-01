@@ -171,33 +171,56 @@ export default function OnboardingPage() {
         return;
       }
 
-      // Use upsert to insert or update profile
-      const { data, error } = await supabaseClient
+      // First, check if profile exists
+      const { data: existingProfile, error: checkError } = await supabaseClient
         .from('profiles')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          country: formData.country,
-          contract_types: formData.contractTypes,
-          preferred_language: formData.language,
-          onboarding_complete: true,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'id',
-          ignoreDuplicates: false,
-        })
-        .select();
+        .select('id')
+        .eq('id', user.id)
+        .single();
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 = no rows returned, which is expected if profile doesn't exist
+        throw checkError;
       }
 
-      if (!data || data.length === 0) {
-        throw new Error('Profile was not saved properly');
+      let result;
+      
+      if (existingProfile) {
+        // Profile exists, use UPDATE
+        result = await supabaseClient
+          .from('profiles')
+          .update({
+            country: formData.country,
+            contract_types: formData.contractTypes,
+            preferred_language: formData.language,
+            onboarding_complete: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', user.id)
+          .select();
+      } else {
+        // Profile doesn't exist, use INSERT
+        result = await supabaseClient
+          .from('profiles')
+          .insert({
+            id: user.id,
+            email: user.email,
+            country: formData.country,
+            contract_types: formData.contractTypes,
+            preferred_language: formData.language,
+            onboarding_complete: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select();
       }
 
-      console.log('Profile saved successfully:', data);
+      if (result.error) {
+        console.error('Supabase error:', result.error);
+        throw result.error;
+      }
+
+      console.log('Profile saved successfully:', result.data);
 
       // Redirect to contracts page
       router.push('/contracts');
