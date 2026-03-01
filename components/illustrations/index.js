@@ -76,7 +76,7 @@ export {
   RobotAllClear
 } from './RobotIllustrations';
 
-// Card Icons
+// Card Icons — Contract Type Icons
 export {
   IconNDA,
   IconMSA,
@@ -90,6 +90,16 @@ export {
   IconSaaS,
   IconGeneral,
   IconExpired
+} from './CardIcons';
+
+// Card Icons — Generic File Icons
+export {
+  FileIconDefault,
+  FileIconPDF,
+  FileIconScanned,
+  FileIconImage,
+  FileIconDraft,
+  FileIconSigned
 } from './CardIcons';
 
 // Re-export all as default object

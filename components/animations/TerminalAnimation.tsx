@@ -60,33 +60,24 @@ export const TerminalAnimation = ({
 
   return (
     <motion.div
-      className="terminal rounded-xl overflow-hidden"
+      className="terminal rounded-xl overflow-hidden border border-[#E6DCCA]"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -24 }}
       transition={{ duration: 0.4 }}
       style={{
-        background: "#0d1117",
+        background: "transparent",
         padding: "24px",
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: "13px",
-        color: "#e6edf3",
+        color: "#3a3530",
         minHeight: "280px",
         position: "relative",
       }}
     >
-      {/* Terminal 扫描线效果 */}
-      <div 
-        className="absolute top-0 left-0 right-0 h-px pointer-events-none"
-        style={{
-          background: "linear-gradient(90deg, transparent, #3fb950, transparent)",
-          animation: "scanline 3s linear infinite",
-        }}
-      />
-
       {/* Terminal 标题栏 */}
       <div className="flex items-center gap-2 mb-4 opacity-50">
-        <span className="text-[#3fb950]">●</span>
+        <span className="text-[#16a34a]">●</span>
         <span className="text-xs tracking-wide">SIGNOVA INTELLIGENCE</span>
       </div>
 
@@ -97,7 +88,7 @@ export const TerminalAnimation = ({
             key={i}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center gap-2 text-[#3fb950]"
+            className="flex items-center gap-2 text-[#16a34a]"
           >
             <span>✓</span>
             <span>{steps[i]}</span>
@@ -109,13 +100,13 @@ export const TerminalAnimation = ({
       {currentStep < steps.length && (
         <div className="flex items-center gap-2"
         >
-          <span className="text-[#f0883e]">›</span>
+          <span className="text-[#c8873a]">›</span>
           <span>{displayedText}</span>
           {/* 光标闪烁 */}
           <motion.span
             animate={{ opacity: [1, 0, 1] }}
             transition={{ duration: 0.8, repeat: Infinity }}
-            className="inline-block w-2 h-3.5 bg-[#e6edf3]"
+            className="inline-block w-2 h-3.5 bg-[#1a1714]"
           />
         </div>
       )}
@@ -126,18 +117,11 @@ export const TerminalAnimation = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="mt-4 text-[#3fb950]"
+          className="mt-4 text-[#16a34a]"
         >
           Analysis complete. Rendering results...
         </motion.div>
       )}
-
-      <style jsx>{`
-        @keyframes scanline {
-          from { transform: translateX(-100%); }
-          to { transform: translateX(100%); }
-        }
-      `}</style>
     </motion.div>
   );
 };

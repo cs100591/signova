@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { RobotWaiting } from "@/components/illustrations";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,6 +67,11 @@ export default function LoginPage() {
           transition={{ duration: 0.5 }}
           className="w-full max-w-md"
         >
+          {/* Robot illustration */}
+          <div className="flex justify-center mb-6">
+            <RobotWaiting width={80} height={80} />
+          </div>
+
           {/* Toggle */}
           <div className="flex p-1 bg-white rounded-xl border border-[#ddd5c8] mb-8">
             <button

@@ -18,13 +18,14 @@ import {
 } from "lucide-react";
 import TerminalAnimation from "@/components/animations/TerminalAnimation";
 import { ResultsView } from "@/components/animations/ResultsAnimation";
-import { RobotWaiting } from "@/components/illustrations";
+import { RobotWaiting, RobotComplete, RobotFoundRisk, RobotAllClear } from "@/components/illustrations";
+import { IconMSA, IconRenewal, IconNDA } from "@/components/illustrations";
 
 // Mock contracts data
 const contracts = [
-  { id: 1, name: "Acme Corp MSA", type: "Service Agreement", icon: "💎" },
-  { id: 2, name: "Dunder Mifflin Renewal", type: "Renewal", icon: "📄" },
-  { id: 3, name: "Stark Industries NDA", type: "NDA", icon: "🛡️" },
+  { id: 1, name: "Acme Corp MSA", type: "Service Agreement", Icon: IconMSA },
+  { id: 2, name: "Dunder Mifflin Renewal", type: "Renewal", Icon: IconRenewal },
+  { id: 3, name: "Stark Industries NDA", type: "NDA", Icon: IconNDA },
 ];
 
 // 快捷问题
@@ -47,7 +48,7 @@ interface AnalysisResult {
 }
 
 export default function TerminalPage() {
-  const [selectedContract, setSelectedContract] = useState<typeof contracts[0] | null>(null);
+  const [selectedContract, setSelectedContract] = useState<(typeof contracts)[0] | null>(null);
   const [selectedFocus, setSelectedFocus] = useState("Liability");
   const [showContractSelector, setShowContractSelector] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -147,7 +148,9 @@ export default function TerminalPage() {
                 onClick={() => setSelectedContract(contract)}
                 className="w-full flex items-center gap-4 p-4 bg-white rounded-xl border border-[#E6DCCA] hover:border-[#F59E0B] hover:shadow-md transition-all text-left"
               >
-                <span className="text-2xl">{contract.icon}</span>
+                <div className="w-10 h-10 rounded-lg bg-[#FEF3C7] flex items-center justify-center shrink-0">
+                  <contract.Icon width={22} height={22} className="text-[#B45309]" />
+                </div>
                 <div className="flex-1">
                   <div className="font-medium text-[#1A1A1A]">{contract.name}</div>
                   <div className="text-sm text-[#737373]">{contract.type}</div>
@@ -191,7 +194,7 @@ export default function TerminalPage() {
             onClick={() => setShowContractSelector(!showContractSelector)}
             className="flex items-center gap-2 text-sm text-[#525252] bg-white px-3 py-2 rounded-lg border border-[#E6DCCA] hover:border-[#F59E0B] transition-colors"
           >
-            <span>{selectedContract.icon}</span>
+            <selectedContract.Icon width={18} height={18} className="text-[#B45309]" />
             <span>{selectedContract.name}</span>
             <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />
           </button>
@@ -211,7 +214,7 @@ export default function TerminalPage() {
                       selectedContract.id === contract.id ? "bg-[#FEF3C7]" : ""
                     }`}
                   >
-                    <span>{contract.icon}</span>
+                    <contract.Icon width={18} height={18} className="text-[#B45309]" />
                     <div className="flex-1">
                       <div className="text-sm font-medium text-[#1A1A1A]">{contract.name}</div>
                       <div className="text-xs text-[#737373]">{contract.type}</div>
@@ -311,7 +314,21 @@ export default function TerminalPage() {
 
         {/* Analysis Results with Animation */}
         {analysisResult && (
-          <ResultsView result={analysisResult} isAnalyzing={isAnalyzing} />
+          <>
+            {/* Dynamic robot based on risk score */}
+            {!isAnalyzing && analysisResult.riskScore !== undefined && (
+              <div className="flex justify-center mb-2">
+                {analysisResult.riskScore > 70 ? (
+                  <RobotFoundRisk width={80} height={80} />
+                ) : analysisResult.riskScore <= 40 ? (
+                  <RobotAllClear width={80} height={80} />
+                ) : (
+                  <RobotComplete width={80} height={80} />
+                )}
+              </div>
+            )}
+            <ResultsView result={analysisResult} isAnalyzing={isAnalyzing} />
+          </>
         )}
 
         <div ref={chatEndRef} />

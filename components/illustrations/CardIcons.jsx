@@ -129,6 +129,63 @@ export const IconExpired = ({ width = 28, height = 28, className = "" }) => (
   </svg>
 );
 
+// ─── Generic File Icons ───────────────────────────────────────────────────────
+
+export const FileIconDefault = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <path d="M10 16 L22 16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M10 20 L22 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M10 24 L16 24" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+export const FileIconPDF = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <text x="9" y="23" fontFamily="DM Sans, sans-serif" fontSize="7.5" fontWeight="700" fill="currentColor">PDF</text>
+  </svg>
+);
+
+export const FileIconScanned = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <path d="M6 18 L26 18" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2" strokeLinecap="round" opacity="0.5"/>
+    <path d="M3 18 L6 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M3 15 L3 21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+export const FileIconImage = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <path d="M9 24 L13 18 L17 22 L20 19 L24 24Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round"/>
+    <circle cx="12" cy="15" r="2" stroke="currentColor" strokeWidth="1.2" fill="none"/>
+  </svg>
+);
+
+export const FileIconDraft = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round" strokeDasharray="4 2"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <path d="M12 22 L18 16 L21 19 L15 25Z" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round"/>
+    <path d="M18 16 L20 14 L22 16 L21 19" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinejoin="round"/>
+    <path d="M12 22 L11 25 L14 24" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+);
+
+export const FileIconSigned = ({ width = 32, height = 32, className = "" }) => (
+  <svg width={width} height={height} viewBox="0 0 32 32" fill="none" className={className}>
+    <path d="M6 27 L6 7 Q6 5 8 5 L20 5 L26 11 L26 27 Q26 29 24 29 L8 29 Q6 29 6 27Z" stroke="currentColor" strokeWidth="2" fill="white" strokeLinejoin="round"/>
+    <path d="M20 5 L20 11 L26 11" stroke="currentColor" strokeWidth="1.8" fill="none"/>
+    <path d="M10 18 L14 22 L22 14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+);
+
 export default {
   IconNDA,
   IconMSA,
@@ -141,5 +198,11 @@ export default {
   IconPartnership,
   IconSaaS,
   IconGeneral,
-  IconExpired
+  IconExpired,
+  FileIconDefault,
+  FileIconPDF,
+  FileIconScanned,
+  FileIconImage,
+  FileIconDraft,
+  FileIconSigned,
 };

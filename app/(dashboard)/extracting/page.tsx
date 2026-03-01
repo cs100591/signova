@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
+import { UploadScanning } from "@/components/illustrations";
 
 export default function ExtractingPage() {
   const router = useRouter();
@@ -24,8 +25,8 @@ export default function ExtractingPage() {
   return (
     <div className="flex h-full items-center justify-center p-10">
       <div className="bg-white rounded-[20px] border border-[#E6DCCA] p-12 w-full max-w-[480px] text-center">
-        <div className="w-[72px] h-[72px] rounded-2xl bg-[#FEF3C7] flex items-center justify-center mx-auto mb-6">
-          <span className="text-3xl">✨</span>
+        <div className="flex justify-center mb-6">
+          <UploadScanning width={100} height={100} />
         </div>
 
         <h2 className="text-xl font-semibold text-[#1A1A1A] mb-6">
