@@ -25,16 +25,16 @@ const contractTypes = [
 
 const languages = [
   { code: "EN", label: "English", flag: "🇺🇸" },
-  { code: "ZH", label: "中文 (简体)", flag: "🇨🇳" },
-  { code: "ZH_TW", label: "中文 (繁體)", flag: "🇹🇼" },
+  { code: "ZH", label: "Chinese (Simplified)", flag: "🇨🇳" },
+  { code: "ZH_TW", label: "Chinese (Traditional)", flag: "🇹🇼" },
   { code: "MS", label: "Bahasa Malaysia", flag: "🇲🇾" },
   { code: "ID", label: "Bahasa Indonesia", flag: "🇮🇩" },
-  { code: "TH", label: "ภาษาไทย", flag: "🇹🇭" },
-  { code: "JA", label: "日本語", flag: "🇯🇵" },
-  { code: "KO", label: "한국어", flag: "🇰🇷" },
-  { code: "ES", label: "Español", flag: "🇪🇸" },
-  { code: "FR", label: "Français", flag: "🇫🇷" },
-  { code: "DE", label: "Deutsch", flag: "🇩🇪" },
+  { code: "TH", label: "Thai", flag: "🇹🇭" },
+  { code: "JA", label: "Japanese", flag: "🇯🇵" },
+  { code: "KO", label: "Korean", flag: "🇰🇷" },
+  { code: "ES", label: "Spanish", flag: "🇪🇸" },
+  { code: "FR", label: "French", flag: "🇫🇷" },
+  { code: "DE", label: "German", flag: "🇩🇪" },
   { code: "OTHER", label: "Other", flag: "🌍" },
 ];
 

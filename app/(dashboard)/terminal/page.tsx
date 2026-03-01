@@ -28,12 +28,12 @@ const contracts = [
   { id: 3, name: "Stark Industries NDA", type: "NDA", Icon: IconNDA },
 ];
 
-// 快捷问题
+// Quick questions for the terminal
 const quickQuestions = [
-  "对我不利的条款？",
-  "这合约正常吗？",
-  "终止条款怎么写？",
-  "付款条件风险？",
+  "What clauses are risky for me?",
+  "Is this contract standard?",
+  "How can I negotiate this?",
+  "What's missing from this contract?",
 ];
 
 interface AnalysisResult {
@@ -47,6 +47,14 @@ interface AnalysisResult {
   _parsed?: boolean;
 }
 
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  type?: 'analysis' | 'text';
+  analysisData?: AnalysisResult;
+}
+
 export default function TerminalPage() {
   const [selectedContract, setSelectedContract] = useState<(typeof contracts)[0] | null>(null);
   const [selectedFocus, setSelectedFocus] = useState("Liability");
@@ -54,6 +62,8 @@ export default function TerminalPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputValue, setInputValue] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const focusAreas = [
@@ -65,7 +75,7 @@ export default function TerminalPage() {
     { name: "Other", riskCount: 0 },
   ];
 
-  // 自动滚动到底部
+  // Auto-scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [isAnalyzing, analysisResult]);
@@ -91,15 +101,15 @@ export default function TerminalPage() {
       
       const data = await response.json();
       
-      // 检查是否成功解析为结构化数据
+      // Check if response was successfully parsed as structured data
       if (data._parsed && data.riskScore !== undefined) {
-        // 成功解析 JSON，直接设置结果
+        // Successfully parsed JSON
         setAnalysisResult(data);
       } else if (data.riskScore !== undefined) {
-        // 有部分结构化数据
+        // Has partial structured data
         setAnalysisResult(data);
       } else {
-        // 返回的是原始文本（可能是简单分析模式）
+        // Raw text response (simple analysis mode)
         setAnalysisResult({
           analysis: data.analysis,
           model: data.model,
@@ -123,6 +133,69 @@ export default function TerminalPage() {
     if (score <= 40) return "Low Risk";
     if (score <= 70) return "Medium Risk";
     return "High Risk";
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!message.trim() || isAnalyzing) return;
+    
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: message,
+      type: 'text'
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInputValue('');
+    
+    setIsAnalyzing(true);
+    
+    try {
+      const response = await fetch('/api/ai/analyze-new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contractText: "Either party may terminate this Agreement with ninety (90) days prior written notice. The Company shall not be liable for any indirect, incidental, or consequential damages.",
+          focusArea: selectedFocus,
+          analysisDepth: 'deep',
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Analysis request failed');
+      }
+      
+      const data = await response.json();
+      
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.analysis || 'Analysis completed.',
+        type: 'analysis',
+        analysisData: data.riskScore !== undefined ? data : undefined
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      if (data.riskScore !== undefined) {
+        setAnalysisResult(data);
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        type: 'text'
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleQuickQuestion = (question: string) => {
+    handleSendMessage(question);
   };
 
   // Initial state - No contract selected
@@ -185,7 +258,7 @@ export default function TerminalPage() {
         <div className="flex items-center gap-2.5">
           <span className="w-2 h-2 rounded-full bg-[#059669]"></span>
           <span className="text-[13px] font-medium text-[#737373] tracking-wide">
-            ACCORDO INTELLIGENCE
+            SIGNOVA INTELLIGENCE
           </span>
         </div>
         
@@ -343,11 +416,9 @@ export default function TerminalPage() {
           {quickQuestions.map((question, idx) => (
             <button
               key={idx}
-              onClick={() => {
-                // TODO: Send quick question
-                console.log('Quick question:', question);
-              }}
-              className="px-4 py-2 bg-white border border-[#E6DCCA] rounded-lg text-sm text-[#525252] hover:border-[#F59E0B] hover:text-[#F59E0B] transition-colors"
+              onClick={() => handleQuickQuestion(question)}
+              disabled={isAnalyzing}
+              className="px-4 py-2 bg-white border border-[#E6DCCA] rounded-lg text-sm text-[#525252] hover:border-[#F59E0B] hover:text-[#F59E0B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {question}
             </button>
@@ -361,9 +432,22 @@ export default function TerminalPage() {
           <input
             type="text"
             placeholder="Ask Signova anything about this contract..."
-            className="flex-1 bg-transparent text-[15px] placeholder:text-[#A3A3A3] focus:outline-none font-mono"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage(inputValue);
+              }
+            }}
+            disabled={isAnalyzing}
+            className="flex-1 bg-transparent text-[15px] placeholder:text-[#A3A3A3] focus:outline-none font-mono disabled:opacity-50"
           />
-          <button className="w-10 h-10 rounded-xl bg-[#F59E0B] hover:bg-[#D97706] flex items-center justify-center transition-colors">
+          <button 
+            onClick={() => handleSendMessage(inputValue)}
+            disabled={isAnalyzing || !inputValue.trim()}
+            className="w-10 h-10 rounded-xl bg-[#F59E0B] hover:bg-[#D97706] flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <ArrowUp className="w-5 h-5 text-white" />
           </button>
         </div>

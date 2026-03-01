@@ -34,12 +34,12 @@ export default function LoginPage() {
         return;
       }
 
-      // TODO: 集成 Supabase Auth
-      // 临时模拟成功
+      // TODO: Integrate Supabase Auth
+      // Temporary mock success
       setTimeout(() => {
         setSuccess(isLogin ? "Login successful!" : "Account created!");
         setIsLoading(false);
-        // 2秒后跳转到 dashboard
+        // Redirect to dashboard after 2 seconds
         setTimeout(() => {
           router.push("/contracts");
         }, 1500);

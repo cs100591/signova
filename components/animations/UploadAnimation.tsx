@@ -39,7 +39,7 @@ export const UploadAnimation = ({
       elapsed += step.duration;
     });
 
-    // 进度条
+    // Progress bar
     const interval = setInterval(() => {
       setProgress((p) => Math.min(p + 2, 95));
     }, total / 50);
@@ -53,7 +53,7 @@ export const UploadAnimation = ({
 
   return (
     <AnimatePresence mode="wait">
-      {/* 上传进行中 */}
+      {/* Upload in progress */}
       {isUploading && !isComplete && (
         <motion.div
           key="uploading"
@@ -63,7 +63,7 @@ export const UploadAnimation = ({
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ duration: 0.3 }}
         >
-          {/* 文件图标 */}
+          {/* File icon */}
           <motion.div
             className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-[#FEF3C7] flex items-center justify-center"
             initial={{ scale: 0, rotate: -10 }}
@@ -73,14 +73,14 @@ export const UploadAnimation = ({
             <FileText className="w-10 h-10 text-[#D97706]" />
           </motion.div>
 
-          {/* 文件名 */}
+          {/* File name */}
           {fileName && (
             <p className="text-center text-sm text-[#737373] mb-4 font-mono truncate px-4">
               {fileName}
             </p>
           )}
 
-          {/* 进度条 */}
+          {/* Progress bar */}
           <div className="h-2 bg-[#F5EFE6] rounded-full overflow-hidden mb-4">
             <motion.div
               className="h-full bg-gradient-to-r from-[#F59E0B] to-[#D97706]"
@@ -89,7 +89,7 @@ export const UploadAnimation = ({
             />
           </div>
 
-          {/* 当前步骤文字 */}
+          {/* Current step text */}
           <AnimatePresence mode="wait">
             <motion.p
               key={stepIndex}
@@ -103,12 +103,12 @@ export const UploadAnimation = ({
             </motion.p>
           </AnimatePresence>
 
-          {/* 进度百分比 */}
+          {/* Progress percentage */}
           <p className="text-center text-xs text-[#A3A3A3] mt-2">{progress}%</p>
         </motion.div>
       )}
 
-      {/* 上传完成 */}
+      {/* Upload complete */}
       {isComplete && (
         <motion.div
           key="complete"
@@ -117,7 +117,7 @@ export const UploadAnimation = ({
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: "spring", stiffness: 250, damping: 20 }}
         >
-          {/* 成功图标 */}
+          {/* Success icon */}
           <motion.div
             className="w-20 h-20 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center"
             initial={{ scale: 0 }}
@@ -152,7 +152,7 @@ export const UploadAnimation = ({
         </motion.div>
       )}
 
-      {/* 待机状态 - 简单的上传提示 */}
+      {/* Idle state - simple upload hint */}
       {!isUploading && !isComplete && (
         <motion.div
           key="idle"

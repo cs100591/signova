@@ -36,12 +36,12 @@ This aligns with industry standards while still providing reasonable transition 
     
     let analysis;
     
-    // 根据 analysisDepth 选择模型
+    // Select model based on analysisDepth
     if (analysisDepth === 'simple') {
-      // 简单分析 - 使用 Haiku 4.5（快速、便宜）
+      // Simple analysis - Using Haiku 4.5 (fast, cheap)
       analysis = await analyzeContractSimple(contractText, focusArea);
     } else {
-      // 深度分析 - 使用 Sonnet 4.6（高质量）
+      // Deep analysis - Using Sonnet 4.6 (high quality)
       analysis = await analyzeContract(contractText, focusArea);
     }
 

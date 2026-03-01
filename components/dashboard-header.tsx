@@ -8,7 +8,7 @@ export default function DashboardHeader() {
   const router = useRouter();
 
   const handleLogout = () => {
-    // TODO: 实现实际的登出逻辑（清除 session/token）
+    // TODO: Implement actual logout logic (clear session/token)
     router.push("/");
   };
 

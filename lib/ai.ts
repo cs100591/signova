@@ -1,7 +1,7 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 
-// 简单分析 - 使用 Haiku 4.5（快速、便宜，适合基础询问）
+// Simple analysis - Using Haiku 4.5 (fast, cheap, suitable for basic inquiries)
 export async function analyzeContractSimple(contractText: string, focusArea: string) {
   const prompt = `Instruction:
   - Act as a calm AI contract analyst
@@ -35,7 +35,7 @@ Tone: Clear, Human, Not verbose`;
   return text;
 }
 
-// 深度分析 - 使用 Sonnet 4.6（高质量，适合复杂分析）
+// Deep analysis - Using Sonnet 4.6 (high quality, suitable for complex analysis)
 export async function analyzeContract(contractText: string, focusArea: string) {
   const prompt = `Instruction:
   - Act as a calm AI contract analyst
@@ -55,7 +55,7 @@ Output Format:
 
 Tone: Clear, Human, Not verbose`;
 
-  // 合同审核用 Sonnet 4.6（高质量，适合深度分析）
+  // Contract review uses Sonnet 4.6 (high quality, suitable for deep analysis)
   const timeoutPromise = new Promise((_, reject) =>
     setTimeout(() => reject(new Error('AI analysis timed out')), 20000)
   );
@@ -97,7 +97,7 @@ Tone: Clear, Human, Not verbose`;
     setTimeout(() => reject(new Error('AI analysis timed out')), 15000)
   );
   
-  // 上传提取用 Haiku 4.5（快速、便宜、最新版）
+  // Upload extraction uses Haiku 4.5 (fast, cheap, latest version)
   const aiPromise = generateText({
     model: anthropic('claude-haiku-4-5'),
     prompt,

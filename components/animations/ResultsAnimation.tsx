@@ -27,7 +27,7 @@ interface RiskScoreCardProps {
   verdict?: string;
 }
 
-// 风险评分卡
+// Risk score card
 export const RiskScoreCard = ({ score = 50, verdict = "Analysis complete" }: RiskScoreCardProps) => {
   const getRiskConfig = (s: number) => {
     if (s <= 40) return { color: "#16a34a", label: "Low Risk", bg: "#f0fdf4" };
@@ -63,7 +63,7 @@ export const RiskScoreCard = ({ score = 50, verdict = "Analysis complete" }: Ris
         <span className="text-lg text-[#737373]">/ 100</span>
       </div>
 
-      {/* 进度条动画 */}
+      {/* Progress bar animation */}
       <div className="h-3 bg-white rounded-full overflow-hidden mb-3">
         <motion.div
           className="h-full rounded-full"
@@ -91,7 +91,7 @@ interface FindingCardProps {
   index: number;
 }
 
-// 单个 Finding 卡片
+// Individual Finding card
 const FindingCard = ({ finding, index }: FindingCardProps) => {
   const getSeverityConfig = (s: string) => {
     switch (s) {
@@ -182,7 +182,7 @@ interface FindingsListProps {
   findings?: Finding[];
 }
 
-// Finding 卡片列表
+// Finding cards list
 export const FindingsList = ({ findings = [] }: FindingsListProps) => {
   return (
     <div className="space-y-4">
@@ -197,7 +197,7 @@ interface MissingProtectionsProps {
   items: string[];
 }
 
-// 缺失保护
+// Missing protections
 export const MissingProtections = ({ items }: MissingProtectionsProps) => {
   return (
     <motion.div
@@ -225,7 +225,7 @@ interface SummaryProps {
   points: string[];
 }
 
-// 关键要点
+// Key takeaways
 export const Summary = ({ points }: SummaryProps) => {
   return (
     <motion.div
@@ -252,7 +252,7 @@ interface ResultsViewProps {
   isAnalyzing: boolean;
 }
 
-// 完整结果视图
+// Full results view
 export const ResultsView = ({ result, isAnalyzing }: ResultsViewProps) => {
   return (
     <AnimatePresence mode="wait">
@@ -279,7 +279,7 @@ export const ResultsView = ({ result, isAnalyzing }: ResultsViewProps) => {
             <Summary points={result.summary} />
           )}
           
-          {/* 固定免责声明 */}
+          {/* Fixed disclaimer */}
           <motion.div
             className="text-xs text-[#A3A3A3] text-center pt-6 pb-2"
             initial={{ opacity: 0 }}

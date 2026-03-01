@@ -1,7 +1,7 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 
-// 简单分析 - 使用 Haiku 4.5（快速、便宜，适合基础询问）
+// Simple analysis - Using Haiku 4.5 (fast, cheap, suitable for basic questions)
 export async function analyzeContractSimple(contractText: string, focusArea: string, userProfile?: any) {
   const systemPrompt = buildSystemPrompt(userProfile);
   
@@ -24,7 +24,7 @@ Provide:
   return result.text;
 }
 
-// 深度分析 - 使用 Sonnet 4.6（高质量，适合复杂分析）
+// Deep analysis - Using Sonnet 4.6 (high quality, suitable for complex analysis)
 export async function analyzeContract(
   contractText: string, 
   focusArea: string,
@@ -71,7 +71,7 @@ ${contractText}`;
   return result.text;
 }
 
-// Streaming 版本 - 用于实时显示
+// Streaming version - For real-time display
 export async function* analyzeContractStream(
   contractText: string,
   focusArea: string,
@@ -97,13 +97,13 @@ ${contractText}`;
     prompt,
   });
 
-  // 模拟流式输出，按字符逐个返回
+  // Simulate streaming output, return character by character
   const text = result.text;
   const chunkSize = 5;
   
   for (let i = 0; i < text.length; i += chunkSize) {
     yield text.slice(i, i + chunkSize);
-    // 小延迟模拟打字效果
+    // Small delay to simulate typing effect
     await new Promise(resolve => setTimeout(resolve, 10));
   }
 }
@@ -149,7 +149,7 @@ ${contractText}`;
   }
 }
 
-// 构建动态 System Prompt
+// Build dynamic System Prompt
 function buildSystemPrompt(userProfile?: any) {
   const jurisdiction = userProfile?.country || 'General';
   const language = userProfile?.language || 'English';

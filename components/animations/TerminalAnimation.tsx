@@ -29,7 +29,7 @@ export const TerminalAnimation = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
 
-  // 打字机效果
+  // Typewriter effect
   useEffect(() => {
     if (!isAnalyzing) {
       setCompletedSteps([]);
@@ -46,7 +46,7 @@ export const TerminalAnimation = ({
       i++;
       if (i > text.length) {
         clearInterval(typeInterval);
-        // 打完后等 0.8s，标记完成，进入下一步
+        // Wait 0.8s after typing, mark as complete, move to next step
         setTimeout(() => {
           setCompletedSteps((prev) => [...prev, currentStep]);
           setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
@@ -75,13 +75,13 @@ export const TerminalAnimation = ({
         position: "relative",
       }}
     >
-      {/* Terminal 标题栏 */}
+      {/* Terminal title bar */}
       <div className="flex items-center gap-2 mb-4 opacity-50">
         <span className="text-[#16a34a]">●</span>
         <span className="text-xs tracking-wide">SIGNOVA INTELLIGENCE</span>
       </div>
 
-      {/* 已完成的步骤 */}
+      {/* Completed steps */}
       <div className="space-y-2 mb-3">
         {completedSteps.map((i) => (
           <motion.div
@@ -96,13 +96,13 @@ export const TerminalAnimation = ({
         ))}
       </div>
 
-      {/* 当前正在打字的步骤 */}
+      {/* Current typing step */}
       {currentStep < steps.length && (
         <div className="flex items-center gap-2"
         >
           <span className="text-[#c8873a]">›</span>
           <span>{displayedText}</span>
-          {/* 光标闪烁 */}
+          {/* Cursor blinking */}
           <motion.span
             animate={{ opacity: [1, 0, 1] }}
             transition={{ duration: 0.8, repeat: Infinity }}
@@ -111,7 +111,7 @@ export const TerminalAnimation = ({
         </div>
       )}
 
-      {/* 完成所有步骤后的提示 */}
+      {/* Completion message after all steps */}
       {completedSteps.length === steps.length && (
         <motion.div
           initial={{ opacity: 0 }}

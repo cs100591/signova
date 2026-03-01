@@ -35,10 +35,10 @@ This aligns with industry standards while still providing reasonable transition 
       });
     }
     
-    // 构建 system prompt
+    // Build system prompt
     const systemPrompt = buildSystemPrompt(userProfile);
     
-    // 选择模型
+    // Select model
     const model = analysisDepth === 'simple' 
       ? anthropic('claude-haiku-4-5')
       : anthropic('claude-sonnet-4-6');
@@ -88,16 +88,16 @@ CRITICAL OUTPUT RULES:
       prompt,
     });
 
-    // 尝试解析为结构化数据
+    // Attempt to parse as structured data
     let response: any = {
       analysis: result.text,
       model: analysisDepth === 'simple' ? 'haiku-4.5' : 'sonnet-4.6',
     };
 
-    // 如果是深度分析，解析 JSON 响应
+    // If deep analysis, parse JSON response
     if (analysisDepth === 'deep') {
       try {
-        // 清理可能的 markdown 代码块
+        // Clean possible markdown code blocks
         const cleanText = result.text
           .replace(/```json/g, '')
           .replace(/```/g, '')
@@ -105,16 +105,16 @@ CRITICAL OUTPUT RULES:
         
         const parsed = JSON.parse(cleanText);
         
-        // 如果成功解析，使用结构化数据
+        // If successfully parsed, use structured data
         if (parsed.riskScore !== undefined) {
           response = {
             ...parsed,
             model: 'sonnet-4.6',
-            _parsed: true, // 标记为成功解析
+            _parsed: true, // Mark as successfully parsed
           };
         }
       } catch (e) {
-        // 解析失败，返回原始文本
+        // Parse failed, return raw text
         console.error('JSON parse failed:', e);
         response._parseError = true;
       }

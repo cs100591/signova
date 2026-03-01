@@ -44,7 +44,7 @@ interface Contract {
   status: 'active' | 'expiring_soon' | 'expired' | 'indefinite';
 }
 
-// 辅助函数：计算到期状态
+// Helper function: Calculate expiry status
 const getExpiryStatus = (expiryDate: string | null): { status: Contract['status'], daysLeft: number | null, label: string } => {
   if (!expiryDate) {
     return { status: 'indefinite', daysLeft: null, label: 'Indefinite' };
@@ -173,19 +173,19 @@ export default function ContractsPage() {
 
   const tabs = ["All Contracts", "Drafts", "Archived"];
 
-  // 过滤合约
+  // Filter contracts
   const filteredContracts = useMemo(() => {
     return contracts.filter((contract) => {
-      // 搜索过滤
+      // Search filter
       const matchesSearch = 
         contract.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contract.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contract.description.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // 类型过滤
+      // Type filter
       const matchesType = selectedType === "All" || contract.type === selectedType;
       
-      // 状态过滤
+      // Status filter
       const matchesStatus = selectedStatus === "All" || 
         (selectedStatus === "Expiring Soon" && contract.status === "expiring_soon") ||
         (selectedStatus === "Expired" && contract.status === "expired") ||
@@ -222,7 +222,7 @@ export default function ContractsPage() {
     }
   };
 
-  // 计算统计数据
+  // Calculate stats
   const stats = useMemo(() => {
     const total = contracts.length;
     const expiringThisMonth = contracts.filter(c => {
