@@ -19,18 +19,10 @@ export async function POST(request: Request) {
     }
     
     // Validate file type - now supports PDF and images
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/webp'
-    ];
-    
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    const isValidType = allowedTypes.includes(file.type) || 
-                       ['pdf', 'jpg', 'jpeg', 'png', 'webp'].includes(fileExtension || '');
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
     
-    if (!isValidType) {
+    if (!allowedExtensions.includes(fileExtension || '')) {
       return NextResponse.json(
         { 
           error: 'Invalid file type',

@@ -196,7 +196,7 @@ export default function UploadPage() {
               <input
                 type="file"
                 className="hidden"
-                accept="application/pdf,image/jpeg,image/png,image/webp"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
                 onChange={handleFileSelect}
               />
             </label>
