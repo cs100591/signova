@@ -5,10 +5,7 @@ export async function GET() {
   try {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data, error } = await supabase
       .from('contracts')
@@ -17,14 +14,12 @@ export async function GET() {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[Contracts GET] DB error:', error);
-      return NextResponse.json({ error: 'Failed to fetch contracts', details: error.message }, { status: 500 });
+      console.error('[Contracts GET]', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
-
     return NextResponse.json(data || []);
-  } catch (error: any) {
-    console.error('[Contracts GET] Server error:', error);
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
@@ -32,81 +27,63 @@ export async function POST(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { name, type, amount, currency, effective_date, expiry_date, summary, file_url, party_a, party_b, governing_law } = body;
+    console.log('[Contracts POST] body:', JSON.stringify(body));
 
-    if (!type) {
-      return NextResponse.json({ error: 'Missing required field: type' }, { status: 400 });
-    }
+    const {
+      name, type, amount, currency,
+      effective_date, expiry_date,
+      summary, file_url,
+      party_a, party_b, governing_law,
+    } = body;
 
-    const contractName = name || 'Untitled Contract';
-    const contractSummary = summary || '';
+    if (!type) return NextResponse.json({ error: 'type is required' }, { status: 400 });
 
-    // Build insert with only columns that exist in database
-    // Based on original schema: name, type, party_a, party_b, amount, currency, 
-    // effective_date, expiry_date, summary, file_url, governing_law, status
-    const insertData: Record<string, any> = {
+    // amount column in DB is TEXT — keep as string
+    const amountStr = amount !== undefined && amount !== null && String(amount).trim() !== ''
+      ? String(amount)
+      : null;
+
+    const payload = {
       user_id: user.id,
-      name: contractName,
+      name: (name || 'Untitled Contract').trim(),
       type,
-      summary: contractSummary,
-      status: 'active',
+      amount: amountStr,
+      currency: currency || 'USD',
       effective_date: effective_date || null,
       expiry_date: expiry_date || null,
+      summary: summary || null,
       file_url: file_url || null,
-      currency: currency || 'USD',
       party_a: party_a || null,
       party_b: party_b || null,
       governing_law: governing_law || null,
+      status: 'active',
     };
 
-    // Parse amount safely - only use 'amount' column (not contract_value)
-    if (amount !== undefined && amount !== null && amount !== '') {
-      const cleaned = String(amount).replace(/[^\d.]/g, '');
-      const parsed = cleaned ? parseFloat(cleaned) : null;
-      if (parsed !== null && !isNaN(parsed)) {
-        insertData.amount = parsed;
-      }
-    }
-
-    console.log('[Contracts POST] Inserting:', Object.keys(insertData));
+    console.log('[Contracts POST] inserting payload:', JSON.stringify(payload));
 
     const { data, error } = await supabase
       .from('contracts')
-      .insert(insertData)
+      .insert(payload)
       .select()
       .single();
 
     if (error) {
-      console.error('[Contracts POST] Insert failed:', error);
-      console.error('[Contracts POST] Error code:', error.code);
-      console.error('[Contracts POST] Error message:', error.message);
-      
-      let userMessage = 'Failed to save contract';
-      if (error.code === '42703') {
-        userMessage = `Database error: Column does not exist - ${error.message}`;
-      } else if (error.code === '23502') {
-        userMessage = 'Database error: Required field is missing';
-      } else if (error.code === '42501') {
-        userMessage = 'Permission denied. Please check database policies.';
-      }
-      
+      console.error('[Contracts POST] DB error:', JSON.stringify(error));
       return NextResponse.json({
-        error: userMessage,
-        details: error.message,
+        error: error.message,
         code: error.code,
+        details: error.details,
+        hint: error.hint,
       }, { status: 500 });
     }
 
-    console.log('[Contracts POST] Success:', data?.id);
+    console.log('[Contracts POST] success, id:', data?.id);
     return NextResponse.json(data, { status: 201 });
-  } catch (error: any) {
-    console.error('[Contracts POST] Unexpected error:', error);
-    return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+  } catch (e: any) {
+    console.error('[Contracts POST] unexpected:', e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
