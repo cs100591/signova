@@ -57,20 +57,32 @@ export default function LoginPage() {
 
         setSuccess("Login successful! Redirecting...");
         
+        // Wait a moment for session to be established
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         // Check if onboarding is complete
-        const { data: profile } = await supabaseClient
-          .from('profiles')
-          .select('onboarding_complete')
-          .eq('id', data.user?.id)
-          .single();
-
-        setTimeout(() => {
-          if (profile?.onboarding_complete) {
-            router.push("/contracts");
+        let redirectPath = "/onboarding";
+        try {
+          const { data: profile, error: profileError } = await supabaseClient
+            .from('profiles')
+            .select('onboarding_complete')
+            .eq('id', data.user?.id)
+            .single();
+          
+          if (profileError) {
+            console.log("Profile query error:", profileError);
           } else {
-            router.push("/onboarding");
+            console.log("Profile data:", profile);
+            if (profile?.onboarding_complete) {
+              redirectPath = "/contracts";
+            }
           }
-        }, 1000);
+        } catch (e) {
+          console.error("Profile check error:", e);
+        }
+        
+        console.log("Redirecting to:", redirectPath);
+        window.location.href = redirectPath;
 
       } else {
         // Sign up
