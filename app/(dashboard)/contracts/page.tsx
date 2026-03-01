@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   BarChart3
 } from "lucide-react";
+import { EmptyContracts, EmptySearch } from "@/components/illustrations";
 
 interface Contract {
   id: number;
@@ -374,10 +375,18 @@ export default function ContractsPage() {
         {/* Empty State */}
         {filteredContracts.length === 0 && (
           <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#F3F4F6] flex items-center justify-center mx-auto mb-4">
-              <Search className="w-8 h-8 text-[#9CA3AF]" />
+            <div className="mb-6">
+              {searchQuery || selectedType !== "All" || selectedStatus !== "All" ? (
+                <EmptySearch width={180} height={180} className="mx-auto" />
+              ) : (
+                <EmptyContracts width={180} height={180} className="mx-auto" />
+              )}
             </div>
-            <h3 className="text-lg font-medium text-[#1A1A1A] mb-2">No contracts found</h3>
+            <h3 className="text-lg font-medium text-[#1A1A1A] mb-2">
+              {searchQuery || selectedType !== "All" || selectedStatus !== "All"
+                ? "No contracts found"
+                : "No contracts yet"}
+            </h3>
             <p className="text-sm text-[#6B7280] mb-6">
               {searchQuery || selectedType !== "All" || selectedStatus !== "All"
                 ? "Try adjusting your search or filters"

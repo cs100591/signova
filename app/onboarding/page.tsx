@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Globe, FileText, Languages, ChevronRight } from "lucide-react";
+import { OnboardingLocation, OnboardingContracts, OnboardingLanguage, OnboardingComplete } from "@/components/illustrations";
 
 const jurisdictions = [
   { region: "Southeast Asia", countries: ["Malaysia", "Singapore", "Indonesia", "Thailand", "Philippines", "Vietnam", "Brunei", "Myanmar", "Cambodia", "Laos"] },
@@ -152,8 +153,8 @@ export default function OnboardingPage() {
           {/* Step 1: Country */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <Globe className="w-6 h-6 text-[#F59E0B]" />
+              <div className="flex items-start gap-4">
+                <OnboardingLocation width={80} height={80} className="flex-shrink-0" />
                 <div>
                   <h2 className="text-xl font-semibold text-[#1A1A1A]">Where are you located?</h2>
                   <p className="text-sm text-[#6B7280]">This helps us tailor legal insights to your jurisdiction</p>
@@ -193,8 +194,8 @@ export default function OnboardingPage() {
           {/* Step 2: Contract Types */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <FileText className="w-6 h-6 text-[#F59E0B]" />
+              <div className="flex items-start gap-4">
+                <OnboardingContracts width={80} height={80} className="flex-shrink-0" />
                 <div>
                   <h2 className="text-xl font-semibold text-[#1A1A1A]">What contracts do you typically sign?</h2>
                   <p className="text-sm text-[#6B7280]">Select all that apply</p>
@@ -234,8 +235,8 @@ export default function OnboardingPage() {
           {/* Step 3: Language */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
-                <Languages className="w-6 h-6 text-[#F59E0B]" />
+              <div className="flex items-start gap-4">
+                <OnboardingLanguage width={80} height={80} className="flex-shrink-0" />
                 <div>
                   <h2 className="text-xl font-semibold text-[#1A1A1A]">Preferred analysis language</h2>
                   <p className="text-sm text-[#6B7280]">How would you like AI analysis to be delivered?</p>

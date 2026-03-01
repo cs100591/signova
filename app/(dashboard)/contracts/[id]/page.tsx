@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import ExportPDFButton from "@/components/export-pdf-button";
 import { ContractAnalysis } from "@/lib/pdf-export";
+import { RiskLow, RiskMedium, RiskHigh, AnalysisComplete } from "@/components/illustrations";
 
 interface Contract {
   id: number;
@@ -417,7 +418,9 @@ export default function ContractDetailPage() {
                     return (
                       <div className="bg-white rounded-xl border border-[#E5E7EB] p-8">
                         <div className="text-center py-12">
-                          <Bot className="w-12 h-12 text-[#F59E0B] mx-auto mb-4" />
+                          <div className="mb-6">
+                            <AnalysisComplete width={180} height={180} className="mx-auto" />
+                          </div>
                           <h3 className="text-lg font-semibold text-[#1A1A1A] mb-2">No analysis yet</h3>
                           <p className="text-[#6B7280] mb-6">Run AI analysis to identify risks and get improvement suggestions</p>
                           <Link href={`/terminal?contract=${contract.id}`}>
@@ -546,16 +549,24 @@ export default function ContractDetailPage() {
                 <h3 className="font-semibold text-[#1A1A1A] mb-4">Risk Assessment</h3>
                 
                 <div className="flex items-center justify-center mb-4">
-                  <div className={`w-24 h-24 rounded-full ${getRiskBg(contract.riskScore)} flex items-center justify-center`}>
-                    <span className={`text-3xl font-bold ${getRiskColor(contract.riskScore)}`}>
-                      {contract.riskScore}
-                    </span>
-                  </div>
+                  {contract.riskScore <= 40 ? (
+                    <RiskLow width={120} height={120} />
+                  ) : contract.riskScore <= 70 ? (
+                    <RiskMedium width={120} height={120} />
+                  ) : (
+                    <RiskHigh width={120} height={120} />
+                  )}
                 </div>
                 
                 <div className="text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className={`text-3xl font-bold ${getRiskColor(contract.riskScore)}`}>
+                      {contract.riskScore}
+                    </span>
+                    <span className="text-lg text-[#9CA3AF]">/100</span>
+                  </div>
                   <p className={`font-medium ${getRiskColor(contract.riskScore)}`}>
-                    {contract.riskScore <= 40 ? 'Low Risk' : contract.riskScore <= 70 ? 'Medium Risk' : 'High Risk'}
+                    {contract.riskScore <= 40 ? '✅ Low Risk' : contract.riskScore <= 70 ? '⚠️ Medium Risk' : '🔴 High Risk'}
                   </p>
                   <p className="text-sm text-[#6B7280] mt-1">Based on AI analysis</p>
                 </div>

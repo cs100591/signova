@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { UploadCloud, Plus, Loader2, FileText, Scan, Image } from "lucide-react";
+import { UploadIdle, UploadScanning } from "@/components/illustrations";
 
 export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -147,11 +148,8 @@ export default function UploadPage() {
       >
         {isUploading ? (
           <div className="py-8">
-            <div className="relative w-16 h-16 mx-auto mb-6">
-              <Loader2 className="w-16 h-16 animate-spin text-[#F59E0B]" />
-              {uploadStatus.includes("OCR") && (
-                <Scan className="w-6 h-6 text-[#D97706] absolute bottom-0 right-0 bg-white rounded-full p-0.5" />
-              )}
+            <div className="mb-6">
+              <UploadScanning width={200} height={160} className="mx-auto" />
             </div>
             <h2 className="text-xl font-semibold text-[#1A1A1A] mb-2">
               {uploadStatus}
@@ -182,8 +180,8 @@ export default function UploadPage() {
           </div>
         ) : (
           <>
-            <div className="w-20 h-20 rounded-[20px] bg-[#FEF3C7] flex items-center justify-center mx-auto mb-8">
-              <UploadCloud className="w-9 h-9 text-[#F59E0B]" />
+            <div className="mb-8">
+              <UploadIdle width={200} height={160} className="mx-auto" />
             </div>
 
             <h2 className="text-2xl font-semibold text-[#1A1A1A] mb-3">Upload your contract</h2>
