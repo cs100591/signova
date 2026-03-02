@@ -14,6 +14,7 @@ import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
 import { RiskScoreCard } from "@/components/terminal/RiskScoreCard";
 import { FindingCards } from "@/components/terminal/FindingCards";
 import { MarkdownMessage } from "@/components/terminal/MarkdownMessage";
+import { ChatTypingIndicator } from "@/components/terminal/ChatTypingIndicator";
 
 interface Finding {
   category: string;
@@ -58,6 +59,7 @@ function TerminalPageInner() {
   const [contractText, setContractText] = useState("");
   const [contractName, setContractName] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const [showContractInput, setShowContractInput] = useState(true);
   const [inputMode, setInputMode] = useState<"paste" | "upload">("paste");
   const [analysisComplete, setAnalysisComplete] = useState(false);
@@ -246,13 +248,13 @@ function TerminalPageInner() {
         timestamp: new Date(),
       }]);
     } finally {
-      setIsAnalyzing(false);
+      setIsTyping(false);
     }
   };
 
   // ── Send message handler ────────────────────────────────────────────────
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isAnalyzing) return;
+    if (!text.trim() || isAnalyzing || isTyping) return;
 
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
@@ -262,12 +264,13 @@ function TerminalPageInner() {
     }]);
     setInputText("");
     setShowContractInput(false);
-    setIsAnalyzing(true);
 
     // If we have contract text and haven't analysed yet → run analysis
     if (contractText && !analysisComplete) {
+      setIsAnalyzing(true);
       await startContractAnalysis(contractText, linkedContractId);
     } else {
+      setIsTyping(true);
       // Follow-up question or general chat
       await handleRegularChat(text);
     }
@@ -529,7 +532,7 @@ function TerminalPageInner() {
                   {contractText.trim() && inputMode === "paste" && (
                     <button
                       onClick={() => handleSendMessage("Please analyze this contract")}
-                      disabled={isAnalyzing}
+                      disabled={isAnalyzing || isTyping}
                       className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 transition-colors"
                     >
                       Analyze Contract
@@ -608,6 +611,13 @@ function TerminalPageInner() {
                     </div>
                   )}
 
+                  {/* Normal chat typing indicator */}
+                  {isTyping && (
+                    <div className="mt-4">
+                      <ChatTypingIndicator />
+                    </div>
+                  )}
+
                   <div ref={messagesEndRef} />
                 </div>
               )}
@@ -660,13 +670,13 @@ function TerminalPageInner() {
                   }}
                   placeholder={contractText ? "Ask about this contract..." : "Ask a legal question..."}
                   rows={1}
-                  disabled={isAnalyzing}
+                  disabled={isAnalyzing || isTyping}
                   className="flex-1 px-4 py-3 bg-white text-[#1A1A1A] border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32 disabled:opacity-50 placeholder:text-[#9CA3AF]"
                   style={{ minHeight: "48px" }}
                 />
                 <button
                   onClick={() => handleSendMessage(inputText)}
-                  disabled={!inputText.trim() || isAnalyzing}
+                  disabled={!inputText.trim() || isAnalyzing || isTyping}
                   className="px-4 py-3 bg-[#F59E0B] text-white rounded-xl hover:bg-[#D97706] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <Send className="w-5 h-5" />
