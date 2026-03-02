@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
+import { buildSystemPrompt } from '@/lib/buildSystemPrompt';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
-    const { question, contractText, history } = await request.json();
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { question, contractText, contractId, userProfile } = await request.json();
 
     if (!question) {
       return NextResponse.json(
@@ -13,56 +22,72 @@ export async function POST(request: Request) {
       );
     }
 
+    // 1. Fetch conversation_history for current contract (if any)
+    let conversationHistory: any[] = [];
+    if (contractId) {
+      const { data: history } = await supabase
+        .from('conversation_history')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('contract_id', contractId)
+        .order('created_at', { ascending: true })
+        .limit(10);
+      
+      if (history) {
+        conversationHistory = history.map(h => ({
+          role: h.role,
+          content: h.content
+        }));
+      }
+    }
+
+    // 2. We'll skip pgvector search for past contracts for now since we'd need to generate embeddings on upload first.
+    // We'll implement that in a separate step or module if needed.
+
+    // 3. Save user's question to conversation_history
+    if (contractId) {
+      await supabase.from('conversation_history').insert({
+        user_id: user.id,
+        contract_id: contractId,
+        role: 'user',
+        content: question
+      });
+    }
+
     // Build system prompt
-    const systemPrompt = `You are Signova Intelligence, an expert AI contract analyst and legal assistant.
-
-Your role:
-1. Help users understand legal concepts and contract terms
-2. Analyze contracts when provided with text
-3. Answer general legal questions in plain language
-4. Provide practical advice, not just legal theory
-
-Guidelines:
-- Always write in clear, simple language that a non-lawyer can understand
-- Be honest about limitations - recommend consulting a lawyer for complex matters
-- When analyzing contracts, identify risks and suggest improvements
-- Keep responses concise but informative (150-300 words)
-- Never provide definitive legal advice - always include a disclaimer
-
-Tone: Professional, helpful, and calm.`;
+    const systemPrompt = buildSystemPrompt(userProfile || {});
 
     // Build user prompt
     let userPrompt = question;
-    
     if (contractText) {
-      userPrompt = `Contract Text:\n${contractText}\n\nUser Question: ${question}`;
+      userPrompt = `Contract Context:\n${contractText.substring(0, 3000)}\n\nUser Question: ${question}`;
     }
 
-    // Add conversation history for context
-    let messages = [];
-    if (history && history.length > 0) {
-      messages = history.map((msg: any) => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-    }
+    const messages = [
+      ...conversationHistory,
+      { role: 'user', content: userPrompt }
+    ];
 
-    // Generate response
+    // Check if we want to stream or not. For now we will return a generated text response.
     const result = await generateText({
       model: anthropic('claude-sonnet-4-6'),
       system: systemPrompt,
-      messages: [
-        ...messages,
-        { role: 'user', content: userPrompt },
-      ],
+      messages: messages,
       maxTokens: 1000,
       temperature: 0.7,
     } as any);
 
-    // Add disclaimer
-    const response = `${result.text}\n\n---\n*⚠️ This analysis is for informational purposes only and does not constitute legal advice. For important matters, please consult a qualified attorney.*`;
+    // Save assistant's response to conversation_history
+    if (contractId) {
+      await supabase.from('conversation_history').insert({
+        user_id: user.id,
+        contract_id: contractId,
+        role: 'assistant',
+        content: result.text
+      });
+    }
 
-    return NextResponse.json({ response });
+    return NextResponse.json({ response: result.text });
   } catch (error: any) {
     console.error('Terminal chat error:', error);
     return NextResponse.json(

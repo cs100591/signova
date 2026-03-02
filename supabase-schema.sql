@@ -248,3 +248,41 @@ GRANT ALL ON terminal_chats TO service_role;
 UPDATE profiles
 SET plan = 'business'
 WHERE email = 'cs1005.91@gmail.com';
+
+-- Enable pgvector extension
+create extension if not exists vector;
+
+-- Conversation History Table
+create table if not exists public.conversation_history (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users not null,
+  contract_id uuid references public.contracts,
+  role text not null check (role in ('user', 'assistant', 'system')),
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS for conversation_history
+alter table public.conversation_history enable row level security;
+create policy "Users can view own conversation history" on public.conversation_history
+  for select using (auth.uid() = user_id);
+create policy "Users can insert own conversation history" on public.conversation_history
+  for insert with check (auth.uid() = user_id);
+
+-- Contract Embeddings Table (Vector Search)
+create table if not exists public.contract_embeddings (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users not null,
+  contract_id uuid references public.contracts not null,
+  embedding vector(1536),
+  content_summary text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS for contract_embeddings
+alter table public.contract_embeddings enable row level security;
+create policy "Users can view own contract embeddings" on public.contract_embeddings
+  for select using (auth.uid() = user_id);
+create policy "Users can insert own contract embeddings" on public.contract_embeddings
+  for insert with check (auth.uid() = user_id);
+
