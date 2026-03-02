@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { 
   Plus, 
@@ -153,7 +154,10 @@ export default function ContractsPage() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
         
-        const response = await fetch('/api/contracts', {
+        const workspaceId = localStorage.getItem('activeWorkspaceId');
+        const url = workspaceId ? `/api/contracts?workspaceId=${workspaceId}` : '/api/contracts';
+
+        const response = await fetch(url, {
           signal: controller.signal,
         });
         
@@ -200,6 +204,15 @@ export default function ContractsPage() {
     };
 
     fetchContracts();
+
+    const handleWorkspaceChange = () => {
+      fetchContracts();
+    };
+
+    window.addEventListener('workspaceChange', handleWorkspaceChange);
+    return () => {
+      window.removeEventListener('workspaceChange', handleWorkspaceChange);
+    };
   }, [router]);
 
   // Filter contracts
@@ -553,9 +566,13 @@ export default function ContractsPage() {
                         <span className="px-2 py-1 bg-[#F3F4F6] text-[#374151] text-xs font-medium rounded">
                           {contract.type}
                         </span>
-                        <span className={`px-2 py-1 text-xs font-medium rounded border ${getExpiryBadgeStyle(expiryInfo.status)}`}>
+                        <motion.span 
+                          animate={expiryInfo.status === 'expiring_soon' || expiryInfo.status === 'expired' ? { scale: [1, 1.05, 1] } : {}}
+                          transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
+                          className={`px-2 py-1 text-xs font-medium rounded border ${getExpiryBadgeStyle(expiryInfo.status)}`}
+                        >
                           {expiryInfo.label}
-                        </span>
+                        </motion.span>
                       </div>
 
                       {/* Footer - Value & Owner */}

@@ -1,17 +1,40 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { data, error } = await supabase
-      .from('contracts')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+    // Get url params to filter by workspace if provided
+    const url = new URL(request.url);
+    const workspaceId = url.searchParams.get('workspaceId');
+
+    let query = supabase.from('contracts').select('*');
+
+    if (workspaceId && workspaceId !== 'personal') {
+      // Fetch only workspace contracts
+      query = query.eq('workspace_id', workspaceId);
+    } else if (workspaceId === 'personal') {
+      // Fetch only personal contracts
+      query = query.eq('user_id', user.id).is('workspace_id', null);
+    } else {
+      // Fetch all (personal + any workspace user is a member of)
+      const { data: memberships } = await supabase
+        .from('workspace_members')
+        .select('workspace_id')
+        .eq('user_id', user.id);
+      
+      const workspaceIds = memberships?.map(m => m.workspace_id) || [];
+      const orQuery = workspaceIds.length > 0 
+        ? `user_id.eq.${user.id},workspace_id.in.(${workspaceIds.join(',')})`
+        : `user_id.eq.${user.id}`;
+        
+      query = query.or(orQuery);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('[Contracts GET]', error);
