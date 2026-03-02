@@ -123,15 +123,62 @@ DROP POLICY IF EXISTS "Users can view own contracts" ON contracts;
 DROP POLICY IF EXISTS "Users can insert own contracts" ON contracts;
 DROP POLICY IF EXISTS "Users can update own contracts" ON contracts;
 DROP POLICY IF EXISTS "Users can delete own contracts" ON contracts;
+DROP POLICY IF EXISTS "personal_contracts" ON contracts;
+DROP POLICY IF EXISTS "workspace_contracts" ON contracts;
+DROP POLICY IF EXISTS "delete_contracts" ON contracts;
+DROP POLICY IF EXISTS "insert_contracts" ON contracts;
+DROP POLICY IF EXISTS "update_contracts" ON contracts;
 
-CREATE POLICY "Users can view own contracts" ON contracts
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own contracts" ON contracts
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own contracts" ON contracts
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own contracts" ON contracts
-  FOR DELETE USING (auth.uid() = user_id);
+-- Users can see personal contracts
+CREATE POLICY "personal_contracts" ON contracts
+  FOR SELECT USING (user_id = auth.uid());
+
+-- Users can see workspace contracts if they are a member
+CREATE POLICY "workspace_contracts" ON contracts
+  FOR SELECT USING (
+    workspace_id IN (
+      SELECT workspace_id
+      FROM workspace_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Users can insert contracts for themselves or their workspaces
+CREATE POLICY "insert_contracts" ON contracts
+  FOR INSERT WITH CHECK (
+    user_id = auth.uid()
+    OR
+    workspace_id IN (
+      SELECT workspace_id
+      FROM workspace_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Users can update contracts if personal or in workspace
+CREATE POLICY "update_contracts" ON contracts
+  FOR UPDATE USING (
+    user_id = auth.uid()
+    OR
+    workspace_id IN (
+      SELECT workspace_id
+      FROM workspace_members
+      WHERE user_id = auth.uid()
+    )
+  );
+
+-- Only uploader or workspace admin/owner can delete
+CREATE POLICY "delete_contracts" ON contracts
+  FOR DELETE USING (
+    user_id = auth.uid()
+    OR
+    workspace_id IN (
+      SELECT workspace_id
+      FROM workspace_members
+      WHERE user_id = auth.uid()
+      AND role IN ('owner', 'admin')
+    )
+  );
 
 -- Profiles policies
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
