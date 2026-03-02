@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     // Some versions of the DB schema use 'title', while newer versions use 'name'.
     // We send both to guarantee compatibility and prevent the 'null value in column title' error.
 
-    const payload = {
+    const payload: any = {
       user_id: user.id,
       workspace_id: workspace_id || null,
       title: contractName,
@@ -91,11 +91,12 @@ export async function POST(request: Request) {
       party_b: party_b || null,
       governing_law: governing_law || null,
       status: 'active',
-      file_hash: file_hash || null,
-      contract_group_id: contract_group_id || null,
-      parent_contract_id: parent_contract_id || null,
-      version: version || 1,
     };
+
+    if (file_hash !== undefined) payload.file_hash = file_hash;
+    if (contract_group_id !== undefined) payload.contract_group_id = contract_group_id;
+    if (parent_contract_id !== undefined) payload.parent_contract_id = parent_contract_id;
+    if (version !== undefined) payload.version = version;
 
     console.log('[Contracts POST] inserting payload:', JSON.stringify(payload));
 

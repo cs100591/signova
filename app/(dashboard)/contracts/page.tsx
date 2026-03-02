@@ -29,6 +29,8 @@ import {
   IconPartnership,
   IconSaaS,
   IconGeneral,
+  IconBusiness,
+  IconOther,
   IconExpired
 } from "@/components/illustrations";
 
@@ -83,12 +85,14 @@ const normalizeContractType = (type: string): string => {
   if (t.includes("partnership") || t.includes("joint venture")) return "Partnership";
   if (t.includes("saas") || t.includes("software") || t.includes("license") || t.includes("subscription") || t.includes("platform")) return "SaaS";
   if (t.includes("service") || t.includes("sow") || t.includes("statement of work")) return "Service";
+  if (t.includes("vendor") || t.includes("business") || t.includes("supply")) return "Business";
+  if (t.includes("other") || t.includes("general") || t.includes("miscellaneous")) return "Other";
   return type;
 };
 
 // Helper function to get icon component based on contract type
 const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
-  const iconProps = { width: 28, height: 28, className: isExpired ? "text-red-600" : "text-[#6B7280]" };
+  const iconProps = { width: 36, height: 36, className: isExpired ? "text-red-500" : "text-[#1a1714]" };
 
   if (isExpired) {
     return <IconExpired {...iconProps} />;
@@ -97,29 +101,20 @@ const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
   const normalized = normalizeContractType(type);
 
   switch (normalized) {
-    case "NDA":
-      return <IconNDA {...iconProps} />;
-    case "MSA":
-      return <IconMSA {...iconProps} className="text-blue-600" />;
-    case "Employment":
-      return <IconEmployment {...iconProps} className="text-green-600" />;
-    case "Contractor":
-      return <IconContractor {...iconProps} />;
-    case "Lease":
-      return <IconLease {...iconProps} className="text-amber-600" />;
-    case "Renewal":
-      return <IconRenewal {...iconProps} className="text-amber-600" />;
-    case "Internal":
-      return <IconInternal {...iconProps} className="text-purple-600" />;
-    case "Service":
-      return <IconService {...iconProps} className="text-blue-600" />;
-    case "Partnership":
-      return <IconPartnership {...iconProps} className="text-purple-600" />;
+    case "NDA":        return <IconNDA {...iconProps} />;
+    case "MSA":        return <IconMSA {...iconProps} />;
+    case "Employment": return <IconEmployment {...iconProps} />;
+    case "Contractor": return <IconContractor {...iconProps} />;
+    case "Lease":      return <IconLease {...iconProps} />;
+    case "Renewal":    return <IconRenewal {...iconProps} />;
+    case "Internal":   return <IconInternal {...iconProps} />;
+    case "Service":    return <IconService {...iconProps} />;
+    case "Partnership":return <IconPartnership {...iconProps} />;
     case "SaaS":
-    case "License":
-      return <IconSaaS {...iconProps} className="text-green-600" />;
-    default:
-      return <IconGeneral {...iconProps} />;
+    case "License":    return <IconSaaS {...iconProps} />;
+    case "Business":   return <IconBusiness {...iconProps} />;
+    case "Other":      return <IconOther {...iconProps} />;
+    default:           return <IconGeneral {...iconProps} />;
   }
 };
 
@@ -547,7 +542,7 @@ export default function ContractsPage() {
                     <div className="bg-white rounded-xl border border-[#E5E7EB] p-5 hover:shadow-md transition-shadow h-full flex flex-col">
                       {/* Header with status indicator */}
                       <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-lg bg-[#F3F4F6] flex items-center justify-center">
+                        <div className="w-12 h-12 flex items-center justify-center">
                           {getContractTypeIcon(contract.type, expiryInfo.status === 'expired')}
                         </div>
                         <div className={`w-2 h-2 rounded-full ${getStatusIndicator(contract.expiry_date)}`} />

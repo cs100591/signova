@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UploadCloud, Plus, Loader2, FileText, Scan, Image, AlertCircle, RefreshCw, Users, FilePlus } from "lucide-react";
 import { UploadIdle, UploadScanning } from "@/components/illustrations";
 import { Button } from "@/components/ui/button";
+import { UploadConfetti } from "@/components/animations/UploadConfetti";
 
 export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -107,7 +108,7 @@ export default function UploadPage() {
       } else {
         setTimeout(() => {
           proceedToNextStep(data);
-        }, 500);
+        }, 2000);
       }
     } catch (error: any) {
       console.error("Upload error:", error);
@@ -152,6 +153,7 @@ export default function UploadPage() {
   return (
     <div className="flex h-full items-center justify-center p-10"
     >
+      <UploadConfetti fire={uploadProgress >= 100 && !duplicateData} />
       <div 
         className={`bg-white rounded-[20px] border-2 p-12 w-full max-w-[560px] text-center transition-all ${
           dragActive 

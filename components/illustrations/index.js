@@ -88,6 +88,8 @@ export {
   IconPartnership,
   IconSaaS,
   IconGeneral,
+  IconBusiness,
+  IconOther,
   IconExpired
 } from './CardIcons';
 

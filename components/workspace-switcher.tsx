@@ -33,14 +33,11 @@ export default function WorkspaceSwitcher() {
         const data: Workspace[] = await res.json();
         setWorkspaces(Array.isArray(data) ? data : []);
         const saved = localStorage.getItem("activeWorkspaceId");
-        if (saved && (saved === 'personal' || data.find(w => w.id === saved))) {
+        if (saved && data.find(w => w.id === saved)) {
           setActiveId(saved);
         } else if (data.length > 0) {
           setActiveId(data[0].id);
           localStorage.setItem("activeWorkspaceId", data[0].id);
-        } else {
-          setActiveId('personal');
-          localStorage.setItem("activeWorkspaceId", 'personal');
         }
       }
     } catch (e) {
@@ -63,7 +60,7 @@ export default function WorkspaceSwitcher() {
       const body = await res.json();
       if (!res.ok) { setError(body.error || `Error ${res.status}`); return; }
       setWorkspaces(prev => [...prev, body]);
-          setActiveId(body.id);
+      setActiveId(body.id);
       localStorage.setItem("activeWorkspaceId", body.id);
       window.dispatchEvent(new Event('workspaceChange'));
       setName("");
@@ -76,7 +73,14 @@ export default function WorkspaceSwitcher() {
     }
   };
 
-  const active = activeId === 'personal' ? { id: 'personal', name: 'Personal Space', contractCount: 0 } : workspaces.find(w => w.id === activeId);
+  // Add an event listener to refetch workspaces when contracts are created/deleted/moved
+  useEffect(() => {
+    const handleWorkspaceUpdate = () => { load(); };
+    window.addEventListener('workspaceUpdate', handleWorkspaceUpdate);
+    return () => window.removeEventListener('workspaceUpdate', handleWorkspaceUpdate);
+  }, []);
+
+  const active = workspaces.find(w => w.id === activeId);
 
   if (loading) {
     return (
@@ -165,22 +169,6 @@ export default function WorkspaceSwitcher() {
           {/* Dropdown */}
           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-[#E5E7EB] shadow-lg z-50 overflow-hidden">
             <div className="p-2 max-h-[240px] overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => { 
-                  setActiveId('personal'); 
-                  localStorage.setItem("activeWorkspaceId", 'personal'); 
-                  window.dispatchEvent(new Event('workspaceChange'));
-                  setIsOpen(false); 
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeId === 'personal' ? "bg-[#FEF3C7]" : "hover:bg-[#F3F4F6]"}`}
-              >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold ${activeId === 'personal' ? "bg-[#F59E0B]" : "bg-[#6B7280]"}`}>
-                  P
-                </div>
-                <span className="flex-1 text-left text-sm text-[#1A1A1A] truncate">Personal Space</span>
-                {activeId === 'personal' && <Check className="w-4 h-4 text-[#F59E0B]" />}
-              </button>
               {workspaces.map(ws => (
                 <button
                   key={ws.id}
@@ -193,11 +181,14 @@ export default function WorkspaceSwitcher() {
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${ws.id === activeId ? "bg-[#FEF3C7]" : "hover:bg-[#F3F4F6]"}`}
                 >
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold ${ws.id === activeId ? "bg-[#F59E0B]" : "bg-[#6B7280]"}`}>
-                    {ws.name.charAt(0).toUpperCase()}
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${ws.id === activeId ? "bg-[#F59E0B]" : "bg-[#6B7280]"}`}>
+                    {ws.id === 'personal' ? 'P' : ws.name.charAt(0).toUpperCase()}
                   </div>
-                  <span className="flex-1 text-left text-sm text-[#1A1A1A] truncate">{ws.name}</span>
-                  {ws.id === activeId && <Check className="w-4 h-4 text-[#F59E0B]" />}
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm text-[#1A1A1A] truncate">{ws.name}</p>
+                    <p className="text-xs text-[#6B7280]">{ws.contractCount} contracts</p>
+                  </div>
+                  {ws.id === activeId && <Check className="w-4 h-4 text-[#F59E0B] flex-shrink-0" />}
                 </button>
               ))}
             </div>

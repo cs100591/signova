@@ -19,6 +19,10 @@ interface ContractData {
     party_a?: string;
     party_b?: string;
     governing_law?: string;
+    file_hash?: string;
+    contract_group_id?: string;
+    parent_contract_id?: string;
+    version?: number;
   };
 }
 
@@ -154,6 +158,10 @@ export default function ConfirmPage() {
           party_b: editedData.party_b,
           governing_law: editedData.governing_law,
           workspace_id: selectedWorkspaceId,
+          file_hash: contractData?.metadata?.file_hash,
+          contract_group_id: contractData?.metadata?.contract_group_id,
+          parent_contract_id: contractData?.metadata?.parent_contract_id,
+          version: contractData?.metadata?.version,
         }),
       });
 

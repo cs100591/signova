@@ -34,18 +34,25 @@ export async function GET() {
     }
 
     // Get workspaces where user is owner or member
-    // Note: plan/role columns may not exist yet if migrations haven't run — use try/catch
     const { data: workspaces, error } = await supabase
       .from("workspaces")
       .select(`
         id,
         name,
         created_at,
+        owner_id,
         workspace_members (
           user_id
         )
       `)
       .order("created_at", { ascending: true });
+
+    // Fetch personal contract count
+    const { count: personalCount } = await supabase
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("workspace_id", null);
 
     if (error) {
       console.error("Workspaces query error:", error);
@@ -53,10 +60,10 @@ export async function GET() {
       return NextResponse.json([
         {
           id: "personal",
-          name: "Personal",
+          name: "Personal Space",
           plan: "free",
           memberCount: 1,
-          contractCount: 0,
+          contractCount: personalCount || 0,
           isOwner: true,
         },
       ]);
@@ -65,7 +72,6 @@ export async function GET() {
     // Get contract counts per workspace
     const workspaceIds = workspaces?.map((w: any) => w.id) || [];
     
-    // Get contract counts
     const contractCounts: Record<string, number> = {};
     if (workspaceIds.length > 0) {
       const { data: contracts } = await supabase
@@ -81,13 +87,24 @@ export async function GET() {
     const formatted = (workspaces || []).map((w: any) => ({
       id: w.id,
       name: w.name,
-      plan: "free", // will be updated once migrations run
+      plan: "free",
       memberCount: (w.workspace_members || []).length,
       contractCount: contractCounts[w.id] || 0,
-      isOwner: true, // simplified until owner_id column exists
+      isOwner: w.owner_id === user.id,
     }));
 
-    return NextResponse.json(formatted);
+    // Prepend Personal Space
+    return NextResponse.json([
+      {
+        id: "personal",
+        name: "Personal Space",
+        plan: "free",
+        memberCount: 1,
+        contractCount: personalCount || 0,
+        isOwner: true,
+      },
+      ...formatted
+    ]);
   } catch (error: any) {
     console.error("Workspaces GET error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
