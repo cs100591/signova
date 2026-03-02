@@ -33,10 +33,14 @@ export default function WorkspaceSwitcher() {
         const data: Workspace[] = await res.json();
         setWorkspaces(Array.isArray(data) ? data : []);
         const saved = localStorage.getItem("activeWorkspaceId");
-        if (saved && data.find(w => w.id === saved)) {
+        if (saved && (saved === 'personal' || data.find(w => w.id === saved))) {
           setActiveId(saved);
         } else if (data.length > 0) {
           setActiveId(data[0].id);
+          localStorage.setItem("activeWorkspaceId", data[0].id);
+        } else {
+          setActiveId('personal');
+          localStorage.setItem("activeWorkspaceId", 'personal');
         }
       }
     } catch (e) {
@@ -59,8 +63,9 @@ export default function WorkspaceSwitcher() {
       const body = await res.json();
       if (!res.ok) { setError(body.error || `Error ${res.status}`); return; }
       setWorkspaces(prev => [...prev, body]);
-      setActiveId(body.id);
+          setActiveId(body.id);
       localStorage.setItem("activeWorkspaceId", body.id);
+      window.dispatchEvent(new Event('workspaceChange'));
       setName("");
       setShowForm(false);
       setIsOpen(false);
@@ -71,7 +76,7 @@ export default function WorkspaceSwitcher() {
     }
   };
 
-  const active = workspaces.find(w => w.id === activeId);
+  const active = activeId === 'personal' ? { id: 'personal', name: 'Personal Space', contractCount: 0 } : workspaces.find(w => w.id === activeId);
 
   if (loading) {
     return (
@@ -160,11 +165,32 @@ export default function WorkspaceSwitcher() {
           {/* Dropdown */}
           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-[#E5E7EB] shadow-lg z-50 overflow-hidden">
             <div className="p-2 max-h-[240px] overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => { 
+                  setActiveId('personal'); 
+                  localStorage.setItem("activeWorkspaceId", 'personal'); 
+                  window.dispatchEvent(new Event('workspaceChange'));
+                  setIsOpen(false); 
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${activeId === 'personal' ? "bg-[#FEF3C7]" : "hover:bg-[#F3F4F6]"}`}
+              >
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold ${activeId === 'personal' ? "bg-[#F59E0B]" : "bg-[#6B7280]"}`}>
+                  P
+                </div>
+                <span className="flex-1 text-left text-sm text-[#1A1A1A] truncate">Personal Space</span>
+                {activeId === 'personal' && <Check className="w-4 h-4 text-[#F59E0B]" />}
+              </button>
               {workspaces.map(ws => (
                 <button
                   key={ws.id}
                   type="button"
-                  onClick={() => { setActiveId(ws.id); localStorage.setItem("activeWorkspaceId", ws.id); setIsOpen(false); }}
+                  onClick={() => { 
+                    setActiveId(ws.id); 
+                    localStorage.setItem("activeWorkspaceId", ws.id); 
+                    window.dispatchEvent(new Event('workspaceChange'));
+                    setIsOpen(false); 
+                  }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${ws.id === activeId ? "bg-[#FEF3C7]" : "hover:bg-[#F3F4F6]"}`}
                 >
                   <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold ${ws.id === activeId ? "bg-[#F59E0B]" : "bg-[#6B7280]"}`}>
