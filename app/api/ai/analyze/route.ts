@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { contractText, userCountry = 'United States' } = body;
+    const { contractText } = body;
 
     if (!contractText || contractText.trim().length < 20) {
       return NextResponse.json(
@@ -21,17 +21,26 @@ export async function POST(request: Request) {
       );
     }
 
+    // Fetch user profile
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('country, preferred_language, contract_types, analyses_used')
+      .eq('id', user.id)
+      .single();
+      
+    const userProfileContext = {
+      region: profileData?.country,
+      jurisdiction: profileData?.country,
+      language: profileData?.preferred_language,
+      contractTypes: profileData?.contract_types || [],
+      contractHistory: [],
+      commonConcerns: []
+    };
+
     // Increment usage counter BEFORE running analysis
     // This ensures we track even if analysis fails
     try {
-      // First get current count
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('analyses_used')
-        .eq('id', user.id)
-        .single();
-      
-      const currentCount = profile?.analyses_used || 0;
+      const currentCount = profileData?.analyses_used || 0;
       
       // Increment
       await supabase
@@ -83,7 +92,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const result = await analyzeContractFull(contractText, userCountry);
+    const result = await analyzeContractFull(contractText, userProfileContext);
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('[AI Analyze] Error:', error);

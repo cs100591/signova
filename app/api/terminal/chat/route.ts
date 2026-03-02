@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { question, contractText, contractId, userProfile } = await request.json();
+    const { question, contractText, contractId } = await request.json();
 
     if (!question) {
       return NextResponse.json(
@@ -21,6 +21,22 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // 0. Fetch user profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('country, preferred_language, contract_types')
+      .eq('id', user.id)
+      .single();
+      
+    const userProfileContext = {
+      region: profile?.country,
+      jurisdiction: profile?.country,
+      language: profile?.preferred_language,
+      contractTypes: profile?.contract_types || [],
+      contractHistory: [],
+      commonConcerns: []
+    };
 
     // 1. Fetch conversation_history for current contract (if any)
     let conversationHistory: any[] = [];
@@ -55,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     // Build system prompt
-    const systemPrompt = buildSystemPrompt(userProfile || {});
+    const systemPrompt = buildSystemPrompt(userProfileContext);
 
     // Build user prompt
     let userPrompt = question;

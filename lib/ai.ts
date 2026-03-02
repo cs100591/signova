@@ -1,5 +1,6 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
+import { buildSystemPrompt } from './buildSystemPrompt';
 
 // --- Structured analysis types ---
 export interface Finding {
@@ -58,23 +59,12 @@ function parseAnalysisResult(text: string): AnalysisResult {
 // Full structured analysis — returns AnalysisResult (used by /api/ai/analyze)
 export async function analyzeContractFull(
   contractText: string,
-  userCountry: string = 'United States'
+  userProfile: any = {}
 ): Promise<AnalysisResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
 
-  const systemPrompt = `You are Signova Intelligence — an expert contract risk analyst protecting everyday people.
-
-User Profile:
-- Primary Jurisdiction: ${userCountry}
-- Preferred Language: English
-
-Your principles:
-1. ALWAYS take the perspective of the user (the one uploading this contract)
-2. Write in plain language — explain to a smart friend, not a judge
-3. Be specific — quote exact clause text when flagging issues
-4. Be honest — if a clause is standard, say "This is standard practice"
-5. Prioritize real risks over theoretical ones`;
+  const systemPrompt = buildSystemPrompt(userProfile);
 
   const userPrompt = `Analyze the following contract.
 

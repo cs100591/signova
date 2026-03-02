@@ -1,10 +1,19 @@
 import { NextResponse } from 'next/server';
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
+import { buildSystemPrompt } from '@/lib/buildSystemPrompt';
+import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
-    const { contractText, focusArea, analysisDepth = 'deep', userProfile } = await request.json();
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { contractText, focusArea, analysisDepth = 'deep' } = await request.json();
     
     if (!contractText || !focusArea) {
       return NextResponse.json(
@@ -12,6 +21,22 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Fetch user profile
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('country, preferred_language, contract_types')
+      .eq('id', user.id)
+      .single();
+      
+    const userProfileContext = {
+      region: profileData?.country,
+      jurisdiction: profileData?.country,
+      language: profileData?.preferred_language,
+      contractTypes: profileData?.contract_types || [],
+      contractHistory: [],
+      commonConcerns: []
+    };
     
     // Check if API key is configured
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -36,7 +61,7 @@ This aligns with industry standards while still providing reasonable transition 
     }
     
     // Build system prompt
-    const systemPrompt = buildSystemPrompt(userProfile);
+    const systemPrompt = buildSystemPrompt(userProfileContext);
     
     // Select model
     const model = analysisDepth === 'simple' 
@@ -128,29 +153,4 @@ CRITICAL OUTPUT RULES:
       { status: 500 }
     );
   }
-}
-
-function buildSystemPrompt(userProfile?: any) {
-  const jurisdiction = userProfile?.country || 'General';
-  const language = userProfile?.language || 'English';
-  
-  return `You are Signova Intelligence, an expert contract risk analyst helping everyday users understand contract risks.
-
-Context:
-- User Jurisdiction: ${jurisdiction}
-- Language: ${language}
-
-Principles:
-1. Take the user's perspective (the one signing the contract)
-2. Use plain language, explain like to a smart friend
-3. Quote actual clause text when flagging issues
-4. Be honest about what's standard vs. problematic
-5. Prioritize actionable advice
-
-Risk levels:
-🔴 HIGH - Significant financial/legal risk
-🟡 MEDIUM - Worth negotiating
-🟢 LOW - Standard clause
-
-End with: "⚠️ This analysis is for informational purposes only and does not constitute legal advice."`;
 }
