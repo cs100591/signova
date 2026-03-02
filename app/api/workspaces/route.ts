@@ -147,6 +147,7 @@ export async function POST(request: Request) {
     await supabase.from("workspace_members").insert({
       workspace_id: workspace.id,
       user_id: user.id,
+      role: 'owner',
     });
 
     return NextResponse.json({

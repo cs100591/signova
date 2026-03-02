@@ -13,13 +13,14 @@ import {
   Mail,
 } from "lucide-react";
 import UsageStatsPanel from "@/components/usage-stats";
+import WorkspaceManagement from "@/components/settings/workspace-management";
 import { supabaseClient } from "@/lib/supabase";
 
 const settingsTabs = [
   { id: "profile", label: "Profile", icon: User },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "billing", label: "Billing & Usage", icon: CreditCard },
-  { id: "team", label: "Team Members", icon: Users },
+  { id: "team", label: "Workspace Management", icon: Users },
   { id: "security", label: "Security", icon: Shield },
 ];
 
@@ -382,89 +383,14 @@ export default function SettingsPage() {
             )}
 
             {activeTab === "team" && (
-              <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+              <div className="bg-[#F8F7F4] rounded-xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-semibold text-[#1A1A1A]">Team Members</h3>
-                </div>
-
-                {/* Invite form */}
-                <div className="mb-6 p-4 bg-[#F9FAFB] rounded-lg">
-                  <p className="text-sm font-medium text-[#374151] mb-3 flex items-center gap-2">
-                    <Mail className="w-4 h-4" />
-                    Invite a team member
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => {
-                        setInviteEmail(e.target.value);
-                        setInviteError("");
-                      }}
-                      placeholder="colleague@company.com"
-                      className="flex-1 px-3 py-2 text-sm border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#F59E0B]"
-                    />
-                    <button
-                      onClick={handleInviteMember}
-                      disabled={inviting || !inviteEmail.trim()}
-                      className="px-4 py-2 bg-[#F59E0B] text-white rounded-lg text-sm font-medium hover:bg-[#D97706] disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {inviting ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        "Invite"
-                      )}
-                    </button>
+                  <div>
+                    <h3 className="text-xl font-semibold text-[#1A1A1A]">Workspace Management</h3>
+                    <p className="text-sm text-[#6B7280] mt-1">Manage your workspaces, members, and permissions.</p>
                   </div>
-                  {inviteError && (
-                    <p className="text-xs text-red-500 mt-2">{inviteError}</p>
-                  )}
-                  {inviteSuccess && (
-                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      {inviteSuccess}
-                    </p>
-                  )}
-                  {profile.plan === "free" || profile.plan === "solo" ? (
-                    <p className="text-xs text-[#9CA3AF] mt-2">
-                      Team members require Pro or Business plan.{" "}
-                      <button className="text-[#F59E0B] underline">Upgrade</button>
-                    </p>
-                  ) : null}
                 </div>
-
-                {/* Members list */}
-                <div className="space-y-3">
-                  {profileLoading ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="w-5 h-5 animate-spin text-[#9CA3AF]" />
-                    </div>
-                  ) : (
-                    teamMembers.map((member, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between p-4 bg-[#F9FAFB] rounded-lg"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#F59E0B] to-[#D97706] flex items-center justify-center text-white font-medium">
-                            {(member.email[0] || "U").toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium text-[#1A1A1A]">
-                              {profile.full_name || member.email.split("@")[0]}
-                            </p>
-                            <p className="text-sm text-[#6B7280]">
-                              {member.email}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="px-3 py-1 bg-white rounded-full text-sm text-[#374151] border border-[#E5E7EB]">
-                          {member.role}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <WorkspaceManagement />
               </div>
             )}
 

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase";
 import { WaitingRobot } from "@/components/illustrations";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams?.get('redirect');
+
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,14 +30,22 @@ export default function LoginPage() {
     const checkSession = async () => {
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
-        router.push("/contracts");
+        if (redirectUrl) {
+          router.push(redirectUrl);
+        } else {
+          router.push("/contracts");
+        }
       }
     };
     checkSession();
-  }, [router]);
+  }, [router, redirectUrl]);
 
   const checkOnboardingAndRedirect = async (userId: string | undefined) => {
     try {
+      if (redirectUrl) {
+        router.replace(redirectUrl);
+        return;
+      }
       const { data: profile } = await supabaseClient
         .from('profiles')
         .select('onboarding_complete')
@@ -45,7 +56,7 @@ export default function LoginPage() {
       router.replace(redirectPath);
     } catch (err) {
       console.error("Redirect error:", err);
-      router.replace("/onboarding");
+      router.replace(redirectUrl || "/onboarding");
     }
   };
 
@@ -294,5 +305,13 @@ export default function LoginPage() {
         </Link>
       </footer>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#f5f0e8]"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
