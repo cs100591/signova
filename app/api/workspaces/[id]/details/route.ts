@@ -33,36 +33,58 @@ export async function GET(
       .eq("id", id)
       .single();
 
-    // 2. Fetch Members with Profiles
-    const { data: membersData } = await supabase
+    // 2. Fetch Members
+    const { data: membersData, error: membersError } = await supabase
       .from("workspace_members")
-      .select(`
-        id,
-        user_id,
-        role,
-        joined_at,
-        profiles (
-          full_name,
-          email
-        )
-      `)
+      .select("user_id, role")
       .eq("workspace_id", id);
       
-    const members = (membersData || []).map((m: any) => ({
-      id: m.id,
+    if (membersError) {
+      console.error("Members query error:", membersError);
+    }
+      
+    let members = (membersData || []).map((m: any) => ({
+      id: m.user_id,
       user_id: m.user_id,
       role: m.role,
-      joined_at: m.joined_at,
-      name: m.profiles?.full_name || 'Unknown User',
-      email: m.profiles?.email || 'Unknown Email',
+      joined_at: null,
+      name: 'Unknown User',
+      email: 'Unknown Email',
     }));
 
-    // 3. Fetch Pending Invitations
-    const { data: invitations } = await supabase
-      .from("workspace_invitations")
-      .select("*")
-      .eq("workspace_id", id)
-      .is("accepted_at", null);
+    // 2.1 Fetch Profiles for these members and merge
+    if (members.length > 0) {
+      const userIds = members.map(m => m.user_id);
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+        
+      if (!profilesError && profilesData) {
+        const profileMap = Object.fromEntries(profilesData.map(p => [p.id, p]));
+        members = members.map(m => ({
+          ...m,
+          name: profileMap[m.user_id]?.full_name || m.name,
+          email: profileMap[m.user_id]?.email || m.email,
+        }));
+      }
+    }
+
+    // 3. Fetch Pending Invitations (wrap in try-catch in case table doesn't exist)
+    let invitations: any[] = [];
+    try {
+      const { data: invData, error: invError } = await supabase
+        .from("workspace_invitations")
+        .select("*")
+        .eq("workspace_id", id)
+        .is("accepted_at", null);
+        
+      if (!invError && invData) {
+        invitations = invData;
+      }
+    } catch (e) {
+      console.error("Invitations table might not exist yet", e);
+    }
 
     // 4. Fetch Contracts
     const { data: contracts } = await supabase

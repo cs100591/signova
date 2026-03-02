@@ -19,14 +19,28 @@ export async function GET(
       .from("workspace_invitations")
       .select(`
         *,
-        workspaces (name),
-        profiles:invited_by (full_name, email)
+        workspaces (name)
       `)
       .eq("token", token)
       .single();
 
     if (inviteError || !invite) {
       return NextResponse.json({ error: "Invalid or expired invitation link." }, { status: 404 });
+    }
+
+    // Fetch inviter profile separately
+    let inviter_name = "Unknown";
+    let inviter_email = invite.invited_email; // fallback
+    if (invite.invited_by) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", invite.invited_by)
+        .single();
+      if (profile) {
+        inviter_name = profile.full_name || "Unknown";
+        inviter_email = profile.email || inviter_email;
+      }
     }
 
     if (invite.accepted_at) {
@@ -45,8 +59,8 @@ export async function GET(
     return NextResponse.json({
       workspace_name: invite.workspaces?.name,
       workspace_id: invite.workspace_id,
-      inviter_name: invite.profiles?.full_name,
-      inviter_email: invite.profiles?.email,
+      inviter_name,
+      inviter_email,
       role: invite.role,
     });
 
