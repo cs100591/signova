@@ -60,7 +60,8 @@ export async function POST(request: Request) {
       effective_date, expiry_date,
       summary, file_url,
       party_a, party_b, governing_law,
-      file_hash, contract_group_id, parent_contract_id, version
+      file_hash, contract_group_id, parent_contract_id, version,
+      workspace_id
     } = body;
 
     if (!type) return NextResponse.json({ error: 'type is required' }, { status: 400 });
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
 
     const payload = {
       user_id: user.id,
+      workspace_id: workspace_id || null,
       title: contractName,
       name: contractName,
       type,

@@ -53,9 +53,36 @@ export default function ConfirmPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Workspace state
+  const [workspaces, setWorkspaces] = useState<any[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
+  
   const router = useRouter();
 
   useEffect(() => {
+    // Fetch user workspaces
+    const fetchWorkspaces = async () => {
+      try {
+        const res = await fetch("/api/workspaces");
+        if (res.ok) {
+          const data = await res.json();
+          const wsList = Array.isArray(data) ? data : [];
+          setWorkspaces(wsList);
+          
+          // Default to active workspace if available
+          const saved = localStorage.getItem("activeWorkspaceId");
+          if (saved && saved !== 'personal' && wsList.find((w: any) => w.id === saved)) {
+            setSelectedWorkspaceId(saved);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch workspaces:", e);
+      }
+    };
+    
+    fetchWorkspaces();
+
     // Get uploaded contract data from localStorage
     const data = localStorage.getItem("uploadedContract");
     if (data) {
@@ -126,6 +153,7 @@ export default function ConfirmPage() {
           party_a: editedData.party_a,
           party_b: editedData.party_b,
           governing_law: editedData.governing_law,
+          workspace_id: selectedWorkspaceId,
         }),
       });
 
@@ -225,6 +253,61 @@ export default function ConfirmPage() {
 
           {/* Form */}
           <div className="p-6 space-y-6">
+            {/* Workspace Selection */}
+            {workspaces.length > 0 && (
+              <div className="mb-6 p-4 bg-[#F5EFE6] rounded-xl border border-[#E6DCCA]">
+                <label className="flex items-center gap-2 text-sm font-medium text-[#374151] mb-3">
+                  <Building2 className="w-4 h-4 text-[#D97706]" />
+                  Save to Workspace
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <label className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                    selectedWorkspaceId === null 
+                      ? "bg-white border-[#F59E0B] shadow-sm ring-1 ring-[#F59E0B]" 
+                      : "bg-white/50 border-[#E5E7EB] hover:bg-white"
+                  }`}>
+                    <input 
+                      type="radio" 
+                      name="workspace" 
+                      className="hidden"
+                      checked={selectedWorkspaceId === null}
+                      onChange={() => setSelectedWorkspaceId(null)}
+                    />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
+                      selectedWorkspaceId === null ? "bg-[#F59E0B] text-white" : "bg-gray-200 text-gray-500"
+                    }`}>P</div>
+                    <div>
+                      <div className="text-sm font-medium text-[#1A1A1A]">Personal Space</div>
+                      <div className="text-xs text-[#6B7280]">Only visible to you</div>
+                    </div>
+                  </label>
+                  
+                  {workspaces.map(ws => (
+                    <label key={ws.id} className={`flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      selectedWorkspaceId === ws.id 
+                        ? "bg-white border-[#F59E0B] shadow-sm ring-1 ring-[#F59E0B]" 
+                        : "bg-white/50 border-[#E5E7EB] hover:bg-white"
+                    }`}>
+                      <input 
+                        type="radio" 
+                        name="workspace" 
+                        className="hidden"
+                        checked={selectedWorkspaceId === ws.id}
+                        onChange={() => setSelectedWorkspaceId(ws.id)}
+                      />
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
+                        selectedWorkspaceId === ws.id ? "bg-[#F59E0B] text-white" : "bg-gray-200 text-gray-500"
+                      }`}>{ws.name.charAt(0).toUpperCase()}</div>
+                      <div>
+                        <div className="text-sm font-medium text-[#1A1A1A]">{ws.name}</div>
+                        <div className="text-xs text-[#6B7280]">Shared with team</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Contract Name */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium text-[#374151] mb-2">
