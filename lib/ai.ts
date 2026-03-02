@@ -100,7 +100,6 @@ Return exactly this structure:
 }
 
 Focus areas: General Risk Assessment
-User jurisdiction: ${userCountry}
 
 Contract:
 ${contractText}`;
