@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       effective_date, expiry_date,
       summary, file_url,
       party_a, party_b, governing_law,
+      file_hash, contract_group_id, parent_contract_id, version
     } = body;
 
     if (!type) return NextResponse.json({ error: 'type is required' }, { status: 400 });
@@ -65,6 +66,10 @@ export async function POST(request: Request) {
       party_b: party_b || null,
       governing_law: governing_law || null,
       status: 'active',
+      file_hash: file_hash || null,
+      contract_group_id: contract_group_id || null,
+      parent_contract_id: parent_contract_id || null,
+      version: version || 1,
     };
 
     console.log('[Contracts POST] inserting payload:', JSON.stringify(payload));

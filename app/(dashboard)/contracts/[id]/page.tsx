@@ -15,6 +15,7 @@ import {
   Users,
   Scale,
   AlertCircle,
+  UploadCloud,
   CheckCircle2,
   XCircle,
   Loader2,
@@ -40,6 +41,7 @@ interface Contract {
   analysis_result?: any;
   file_url?: string;
   created_at: string;
+  versions?: any[];
 }
 
 const getStatus = (contract: Contract): "active" | "expiring_soon" | "expired" | "indefinite" => {
@@ -217,7 +219,7 @@ export default function ContractDetailPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <Link href={`/terminal`}>
+              <Link href={`/terminal?contractId=${contractId}`}>
                 <button className="flex items-center gap-2 px-4 py-2.5 bg-[#FEF3C7] text-[#B45309] rounded-lg text-sm font-medium hover:bg-[#FDE68A] transition-colors">
                   <Bot className="w-4 h-4" />
                   Ask AI
@@ -381,7 +383,7 @@ export default function ContractDetailPage() {
                       <p className="text-[#6B7280] mb-6">
                         Run AI analysis to identify risks and get improvement suggestions
                       </p>
-                      <Link href="/terminal">
+                      <Link href={`/terminal?contractId=${contractId}`}>
                         <button className="px-6 py-3 bg-[#F59E0B] text-white rounded-xl font-medium hover:bg-[#D97706]">
                           Start AI Analysis
                         </button>
@@ -586,7 +588,7 @@ export default function ContractDetailPage() {
                   <p className="text-sm text-[#6B7280] mt-1">Based on AI analysis</p>
                 </div>
 
-                <Link href="/terminal">
+                <Link href={`/terminal?contractId=${contractId}`}>
                   <button className="w-full mt-4 px-4 py-2.5 bg-[#F59E0B] text-white rounded-lg text-sm font-medium hover:bg-[#D97706] transition-colors">
                     Ask AI About This
                   </button>
@@ -599,7 +601,7 @@ export default function ContractDetailPage() {
               <h3 className="font-semibold text-[#1A1A1A] mb-4">Quick Actions</h3>
 
               <div className="space-y-2">
-                <Link href="/terminal" className="block">
+                <Link href={`/terminal?contractId=${contractId}`} className="block">
                   <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#F3F4F6] transition-colors text-left">
                     <Bot className="w-4 h-4 text-[#6B7280]" />
                     <span className="text-sm text-[#374151]">Ask AI</span>
@@ -681,6 +683,49 @@ export default function ContractDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* Version History */}
+            {contract.versions && contract.versions.length > 0 && (
+              <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+                <h3 className="font-semibold text-[#1A1A1A] mb-4">Version History</h3>
+                <div className="space-y-4">
+                  {contract.versions.map((v: any, idx: number) => (
+                    <div key={v.id} className="relative flex items-start gap-3">
+                      {idx !== contract.versions!.length - 1 && (
+                        <div className="absolute top-6 left-2.5 w-0.5 h-full bg-[#E5E7EB] -z-10" />
+                      )}
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center mt-0.5 ${v.id === contract.id ? 'bg-[#F59E0B] text-white' : 'bg-[#F3F4F6] text-[#6B7280]'}`}>
+                        <div className="w-2 h-2 rounded-full bg-current" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <Link href={`/contracts/${v.id}`} className={`text-sm font-medium hover:underline ${v.id === contract.id ? 'text-[#1A1A1A]' : 'text-[#4B5563]'}`}>
+                            v{v.version || idx + 1}
+                          </Link>
+                          <span className="text-xs text-[#6B7280]">
+                            {new Date(v.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        {v.risk_score !== undefined && v.risk_score !== null && (
+                          <div className="mt-1 flex items-center gap-1.5 text-xs">
+                            <span className="text-[#6B7280]">Risk: {v.risk_score}</span>
+                            <span>{v.risk_score <= 40 ? '🟢' : v.risk_score <= 70 ? '🟡' : '🔴'}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2">
+                    <Link href="/upload">
+                      <button className="w-full py-2 border border-dashed border-[#D1D5DB] text-[#6B7280] text-sm rounded-lg hover:bg-[#F9FAFB] hover:text-[#374151] transition-colors flex items-center justify-center gap-2">
+                        <UploadCloud className="w-4 h-4" />
+                        Upload New Version
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

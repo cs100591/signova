@@ -2,14 +2,17 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { UploadCloud, Plus, Loader2, FileText, Scan, Image } from "lucide-react";
+import { UploadCloud, Plus, Loader2, FileText, Scan, Image, AlertCircle, RefreshCw, Users, FilePlus } from "lucide-react";
 import { UploadIdle, UploadScanning } from "@/components/illustrations";
+import { Button } from "@/components/ui/button";
 
 export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<string>("Uploading...");
   const [dragActive, setDragActive] = useState(false);
+  const [duplicateData, setDuplicateData] = useState<any>(null);
+  const [contractData, setContractData] = useState<any>(null);
   const router = useRouter();
 
   // Detect file type and return appropriate status messages
@@ -31,10 +34,23 @@ export default function UploadPage() {
     };
   };
 
+  const proceedToNextStep = (data: any, versionArgs?: any) => {
+    // Merge version args into metadata so confirm page can send them to API
+    if (versionArgs) {
+      data.metadata = { ...data.metadata, ...versionArgs };
+    } else if (data.duplicateResult?.contractGroupId) {
+      data.metadata = { ...data.metadata, contract_group_id: data.duplicateResult.contractGroupId, file_hash: data.duplicateResult.fileHash };
+    }
+    localStorage.setItem("uploadedContract", JSON.stringify(data));
+    router.push("/extracting");
+  };
+
   const handleUpload = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
     setUploadStatus("Uploading...");
+    setDuplicateData(null);
+    setContractData(null);
     
     const fileInfo = getFileTypeInfo(file);
     let progressInterval: NodeJS.Timeout | null = null;
@@ -85,13 +101,14 @@ export default function UploadPage() {
       await new Promise(resolve => setTimeout(resolve, 600));
       setUploadProgress(100);
       
-      // Store metadata in localStorage for confirm page
-      localStorage.setItem("uploadedContract", JSON.stringify(data));
-      
-      // Small delay to show 100% progress
-      setTimeout(() => {
-        router.push("/extracting");
-      }, 500);
+      if (data.duplicateResult && data.duplicateResult.type !== 'NONE') {
+        setContractData(data);
+        setDuplicateData(data.duplicateResult);
+      } else {
+        setTimeout(() => {
+          proceedToNextStep(data);
+        }, 500);
+      }
     } catch (error: any) {
       console.error("Upload error:", error);
       if (progressInterval) clearInterval(progressInterval);
@@ -146,7 +163,61 @@ export default function UploadPage() {
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        {isUploading ? (
+        {duplicateData ? (
+           <div className="py-4 text-left">
+             {duplicateData.type === 'EXACT_MATCH' && (
+               <>
+                 <div className="flex items-center gap-2 text-red-600 mb-4">
+                   <AlertCircle className="w-6 h-6" />
+                   <h2 className="text-xl font-bold">Exact Duplicate Detected</h2>
+                 </div>
+                 <p className="text-gray-600 mb-6">{duplicateData.message}</p>
+                 <div className="flex gap-4">
+                   <Button variant="outline" className="w-full" onClick={() => router.push(`/contracts/${duplicateData.existingContractId}`)}>
+                     View Existing
+                   </Button>
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { file_hash: duplicateData.fileHash, contract_group_id: duplicateData.contractGroupId })}>
+                     Upload Anyway
+                   </Button>
+                 </div>
+               </>
+             )}
+             {duplicateData.type === 'NEW_VERSION' && (
+               <>
+                 <div className="flex items-center gap-2 text-amber-500 mb-4">
+                   <RefreshCw className="w-6 h-6" />
+                   <h2 className="text-xl font-bold">New Version Detected</h2>
+                 </div>
+                 <p className="text-gray-600 mb-6">{duplicateData.message}</p>
+                 <div className="flex flex-col gap-3">
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { parent_contract_id: duplicateData.existingContractId, contract_group_id: duplicateData.contractGroupId, version: 2, file_hash: duplicateData.fileHash })}>
+                     Save as New Version
+                   </Button>
+                   <Button variant="outline" className="w-full" onClick={() => proceedToNextStep(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
+                     Upload Anyway
+                   </Button>
+                 </div>
+               </>
+             )}
+             {duplicateData.type === 'SAME_PARTY' && (
+               <>
+                 <div className="flex items-center gap-2 text-blue-500 mb-4">
+                   <Users className="w-6 h-6" />
+                   <h2 className="text-xl font-bold">Same Party Detected</h2>
+                 </div>
+                 <p className="text-gray-600 mb-6">{duplicateData.message}</p>
+                 <div className="flex gap-4">
+                   <Button variant="outline" className="w-full" onClick={() => router.push('/contracts')}>
+                     View All
+                   </Button>
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
+                     Continue Upload
+                   </Button>
+                 </div>
+               </>
+             )}
+           </div>
+        ) : isUploading ? (
           <div className="py-8">
             <div className="mb-6">
               <UploadScanning width={200} height={160} className="mx-auto" />

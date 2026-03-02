@@ -25,7 +25,18 @@ export async function GET(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    // Fetch versions
+    let versions: any[] = [];
+    if (data.contract_group_id) {
+      const { data: vData } = await supabase
+        .from("contracts")
+        .select("id, name, version, created_at, risk_score")
+        .eq("contract_group_id", data.contract_group_id)
+        .order("version", { ascending: true });
+      if (vData) versions = vData;
+    }
+
+    return NextResponse.json({ ...data, versions });
   } catch (error: any) {
     console.error("Contract GET error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });

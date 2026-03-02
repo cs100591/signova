@@ -2,9 +2,18 @@ import { NextResponse } from 'next/server';
 import { processFile } from '@/lib/ocr';
 import { extractMetadata } from '@/lib/ai';
 import { uploadFile } from '@/lib/r2';
+import { createSupabaseServerClient } from '@/lib/supabase';
+import { detectDuplicate } from '@/lib/duplicateDetect';
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
@@ -122,6 +131,15 @@ export async function POST(request: Request) {
       // Continue without file URL
     }
     
+    // Step 2.5: Duplicate detection
+    console.log('[Upload] Running duplicate detection...');
+    let duplicateResult = { type: 'NONE', contractGroupId: '', fileHash: '' };
+    try {
+      duplicateResult = await detectDuplicate(buffer, file.name, user.id, metadata, supabase) as any;
+    } catch (dupError) {
+      console.error('[Upload] Duplicate detection error:', dupError);
+    }
+    
     return NextResponse.json({
       success: true,
       fileName: file.name,
@@ -131,6 +149,7 @@ export async function POST(request: Request) {
       extractedLength: extractedText.length,
       isScanned: isScanned,
       ocrStatus: ocrStatus,
+      duplicateResult,
     });
     
   } catch (error: any) {
