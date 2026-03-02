@@ -670,63 +670,57 @@ export default function ContractsPage() {
                           </button>
                         </Link>
                         
-                        {/* Move to Workspace */}
-                        <div className="relative group/move">
-                          <button 
-                            className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] flex items-center justify-between"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setMoveMenuOpenId(moveMenuOpenId === contract.id ? null : contract.id);
-                            }}
-                          >
-                            <span>Move to Workspace</span>
-                            <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF]" />
-                          </button>
-                          
-                          {moveMenuOpenId === contract.id && (
-                            <div className="absolute right-full top-0 mr-1 w-56 bg-white rounded-lg shadow-lg border border-[#E5E7EB] py-1 z-30">
-                              <div className="px-3 py-1.5 border-b border-[#E5E7EB] mb-1">
-                                <span className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Move to...</span>
-                              </div>
-                              
+                        {/* Move to Workspace — inline expand */}
+                        <button
+                          className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] flex items-center justify-between"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setMoveMenuOpenId(moveMenuOpenId === contract.id ? null : contract.id);
+                          }}
+                        >
+                          <span>Move to Workspace</span>
+                          <ChevronRight className={`w-3.5 h-3.5 text-[#9CA3AF] transition-transform ${moveMenuOpenId === contract.id ? "rotate-90" : ""}`} />
+                        </button>
+
+                        {moveMenuOpenId === contract.id && (
+                          <div className="border-t border-b border-[#F3F4F6] bg-[#FAFAFA]">
+                            <button
+                              disabled={isMoving === contract.id || contract.workspace_id === null}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleMoveToWorkspace(contract.id, 'personal');
+                              }}
+                              className={`w-full pl-7 pr-4 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === null ? 'text-[#9CA3AF]' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
+                            >
+                              {contract.workspace_id === null
+                                ? <Check className="w-3 h-3 text-[#F59E0B] flex-shrink-0" />
+                                : <span className="w-3 flex-shrink-0" />}
+                              <span className="truncate">Personal Space</span>
+                              {isMoving === contract.id && contract.workspace_id !== null && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                            </button>
+
+                            {workspaces.map(ws => (
                               <button
-                                disabled={isMoving === contract.id || contract.workspace_id === null}
+                                key={ws.id}
+                                disabled={isMoving === contract.id || contract.workspace_id === ws.id}
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  handleMoveToWorkspace(contract.id, 'personal');
+                                  handleMoveToWorkspace(contract.id, ws.id);
                                 }}
-                                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === null ? 'text-[#9CA3AF] bg-gray-50' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
+                                className={`w-full pl-7 pr-4 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === ws.id ? 'text-[#9CA3AF]' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
                               >
-                                <div className="w-5 flex justify-center">
-                                  {contract.workspace_id === null && <Check className="w-3.5 h-3.5 text-[#F59E0B]" />}
-                                </div>
-                                Personal Space
-                                {isMoving === contract.id && contract.workspace_id !== null && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                                {contract.workspace_id === ws.id
+                                  ? <Check className="w-3 h-3 text-[#F59E0B] flex-shrink-0" />
+                                  : <span className="w-3 flex-shrink-0" />}
+                                <span className="truncate">{ws.name}</span>
+                                {isMoving === contract.id && contract.workspace_id !== ws.id && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
                               </button>
-                              
-                              {workspaces.map(ws => (
-                                <button
-                                  key={ws.id}
-                                  disabled={isMoving === contract.id || contract.workspace_id === ws.id}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleMoveToWorkspace(contract.id, ws.id);
-                                  }}
-                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === ws.id ? 'text-[#9CA3AF] bg-gray-50' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
-                                >
-                                  <div className="w-5 flex justify-center">
-                                    {contract.workspace_id === ws.id && <Check className="w-3.5 h-3.5 text-[#F59E0B]" />}
-                                  </div>
-                                  <span className="truncate">{ws.name}</span>
-                                  {isMoving === contract.id && contract.workspace_id !== ws.id && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        )}
 
                         <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                           Archive
