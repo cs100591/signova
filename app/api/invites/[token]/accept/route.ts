@@ -38,8 +38,15 @@ export async function POST(
       return NextResponse.json({ error: "This invitation was sent to a different email address." }, { status: 403 });
     }
 
+    // Use admin client to bypass RLS for insertion/update since the token has been successfully verified
+    const { createClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     // Check if user is already a member
-    const { data: existingMember } = await supabase
+    const { data: existingMember } = await adminSupabase
       .from("workspace_members")
       .select("id")
       .eq("workspace_id", invite.workspace_id)
@@ -48,7 +55,7 @@ export async function POST(
 
     if (existingMember) {
       // Mark as accepted and return success if already a member
-      await supabase
+      await adminSupabase
         .from("workspace_invitations")
         .update({ accepted_at: new Date().toISOString() })
         .eq("token", token);
@@ -57,7 +64,7 @@ export async function POST(
     }
 
     // Add member
-    const { error: insertError } = await supabase
+    const { error: insertError } = await adminSupabase
       .from("workspace_members")
       .insert({
         workspace_id: invite.workspace_id,
@@ -71,7 +78,7 @@ export async function POST(
     }
 
     // Mark as accepted
-    await supabase
+    await adminSupabase
       .from("workspace_invitations")
       .update({ accepted_at: new Date().toISOString() })
       .eq("token", token);

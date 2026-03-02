@@ -32,7 +32,14 @@ export async function POST(
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 
-    const { error: inviteError } = await supabase
+    // Use service role to bypass RLS for insertion since we already verified permissions above
+    const { createClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { error: inviteError } = await adminSupabase
       .from("workspace_invitations")
       .insert({
         workspace_id: id,
