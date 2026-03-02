@@ -701,7 +701,7 @@ export default function ContractsPage() {
                               {isMoving === contract.id && contract.workspace_id !== null && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
                             </button>
 
-                            {workspaces.map(ws => (
+                            {workspaces.filter(ws => ws.id !== 'personal').map(ws => (
                               <button
                                 key={ws.id}
                                 disabled={isMoving === contract.id || contract.workspace_id === ws.id}
