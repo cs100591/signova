@@ -357,17 +357,6 @@ function TerminalPageInner() {
   // ── Analysis result cards component ─────────────────────────────────────
   const AnalysisResultCards = ({ result }: { result: AnalysisResult }) => (
     <div className="w-full space-y-4">
-      {/* Dynamic Robot based on Risk Score */}
-      <div className="flex justify-center mb-6">
-        {result.riskScore <= 40 ? (
-          <ClearRobot size={140} />
-        ) : result.riskScore <= 70 ? (
-          <WaitingRobot size={140} />
-        ) : (
-          <RiskRobot size={140} />
-        )}
-      </div>
-
       {/* Risk Score */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -593,16 +582,17 @@ function TerminalPageInner() {
                       ) : (
                         // Regular text message
                         <div
-                          className={`max-w-[80%] px-4 py-3 rounded-2xl ${message.role === "user"
-                              ? "bg-[#1A1A1A] text-white"
-                              : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
-                            }`}
+                          className={`${
+                            message.role === "user"
+                              ? "bg-[#f5f0e8] text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_4px_16px] p-[12px_16px] text-[13px] max-w-[70%]"
+                              : "bg-white text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_16px_4px] p-[12px_16px] text-[13px] max-w-[85%]"
+                          }`}
                         >
                           <MarkdownMessage
                             content={message.content}
                             isUser={message.role === "user"}
                           />
-                          <div className={`text-xs mt-2 ${message.role === "user" ? "text-gray-400" : "text-[#9CA3AF]"}`}>
+                          <div className="text-[10px] text-[#9a8f82] mt-1">
                             {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </div>
                         </div>
@@ -627,7 +617,7 @@ function TerminalPageInner() {
             <div className="border-t border-[#E5E7EB] bg-white p-4 flex-shrink-0">
               {/* Contract loaded indicator */}
               {contractName && (
-                <div className="max-w-3xl mx-auto mb-3 px-3 py-2 bg-[#FEF3C7]/50 rounded-lg flex items-center justify-between">
+                <div className="max-w-3xl mx-auto mb-3 px-3 py-2 bg-[#FEF9E7] border border-[#FDE68A] rounded-lg flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-[#B45309]">
                     <FileText className="w-4 h-4" />
                     {contractName} loaded
@@ -671,7 +661,7 @@ function TerminalPageInner() {
                   placeholder={contractText ? "Ask about this contract..." : "Ask a legal question..."}
                   rows={1}
                   disabled={isAnalyzing}
-                  className="flex-1 px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32 disabled:opacity-50"
+                  className="flex-1 px-4 py-3 bg-white text-[#1A1A1A] border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all resize-none max-h-32 disabled:opacity-50 placeholder:text-[#9CA3AF]"
                   style={{ minHeight: "48px" }}
                 />
                 <button
