@@ -28,40 +28,31 @@ function extractField(block: string, field: string): string {
 }
 
 function parseAnalysisResult(text: string): AnalysisResult {
-  // Risk score
-  const scoreSection = text.match(/---RISK_SCORE---\s*(\d+)\s*\n(.+)/);
-  const riskScore = scoreSection ? Math.min(100, Math.max(0, parseInt(scoreSection[1]))) : 50;
-  const riskVerdict = scoreSection ? scoreSection[2].trim() : 'Contract review required';
-
-  // Findings
-  const findings: Finding[] = [];
-  const findingMatches = [...text.matchAll(/FINDING_START([\s\S]*?)FINDING_END/g)];
-  for (const match of findingMatches) {
-    const block = match[1];
-    findings.push({
-      category: extractField(block, 'category') || 'Other',
-      severity: (extractField(block, 'severity') || 'MEDIUM').toUpperCase() as 'HIGH' | 'MEDIUM' | 'LOW',
-      title: extractField(block, 'title') || 'Finding',
-      issue: extractField(block, 'issue') || '',
-      quote: extractField(block, 'quote') || '',
-      explanation: extractField(block, 'explanation') || '',
-      suggestion: extractField(block, 'suggestion') || '',
-    });
+  try {
+    let clean = text.trim();
+    if (clean.startsWith('```json')) {
+      clean = clean.replace(/^```json/, '').replace(/```$/, '').trim();
+    } else if (clean.startsWith('```')) {
+      clean = clean.replace(/^```/, '').replace(/```$/, '').trim();
+    }
+    const result = JSON.parse(clean);
+    return {
+      riskScore: result.riskScore || 50,
+      riskVerdict: result.riskVerdict || 'Contract review required',
+      findings: result.findings || [],
+      missing: result.missing || [],
+      summary: result.summary || []
+    };
+  } catch (e) {
+    console.error('Failed to parse AI JSON:', e, text);
+    return {
+      riskScore: 50,
+      riskVerdict: 'Analysis failed to parse.',
+      findings: [],
+      missing: [],
+      summary: []
+    };
   }
-
-  // Missing protections
-  const missingSection = text.match(/---MISSING---\s*([\s\S]*?)(?=---SUMMARY---|$)/);
-  const missing = missingSection
-    ? missingSection[1].split('\n').map(l => l.replace(/^[-•*\d.]\s*/, '').trim()).filter(l => l.length > 10)
-    : [];
-
-  // Summary bullets
-  const summarySection = text.match(/---SUMMARY---\s*([\s\S]*?)$/);
-  const summary = summarySection
-    ? summarySection[1].split('\n').map(l => l.replace(/^[•*]\s*/, '').trim()).filter(l => l.length > 5)
-    : [];
-
-  return { riskScore, riskVerdict, findings, missing, summary };
 }
 
 // Full structured analysis — returns AnalysisResult (used by /api/ai/analyze)
@@ -85,32 +76,41 @@ Your principles:
 4. Be honest — if a clause is standard, say "This is standard practice"
 5. Prioritize real risks over theoretical ones`;
 
-  const userPrompt = `Analyze the following contract. Return in EXACTLY this structure — do not deviate:
+  const userPrompt = `Analyze the following contract.
 
----RISK_SCORE---
-{{number 0-100}}
-{{one-line verdict}}
+CRITICAL OUTPUT RULES:
+- Return ONLY a valid JSON object
+- Do NOT include any markdown text, headers, or explanation outside the JSON
+- Do NOT include \`\`\`json code blocks
+- Do NOT add any text before or after the JSON
+- The UI will automatically display the disclaimer — do not include it in output
+- Your entire response must be parseable by JSON.parse()
 
----FINDINGS---
-For each risk (ordered by severity):
+Return exactly this structure:
+{
+  "riskScore": [0-100 integer],
+  "riskVerdict": "one-line verdict e.g. High risk — 2 clauses need attention",
+  "findings": [
+    {
+      "category": "Termination|Liability|Payment|IP|Confidentiality|Other",
+      "severity": "HIGH|MEDIUM|LOW",
+      "title": "short clause name",
+      "issue": "what's wrong in one sentence",
+      "quote": "exact text from contract, max 60 words",
+      "explanation": "plain language explanation, 2-3 sentences",
+      "suggestion": "rewritten clause for HIGH/MEDIUM, empty string for LOW"
+    }
+  ],
+  "missing": ["missing protection 1", "missing protection 2"],
+  "summary": [
+    "most important thing before signing",
+    "second most important thing",
+    "third most important — action item"
+  ]
+}
 
-FINDING_START
-category: {{Termination|Liability|Payment|IP|Confidentiality|Other}}
-severity: {{HIGH|MEDIUM|LOW}}
-title: {{short descriptive name}}
-issue: {{what's problematic, one sentence}}
-quote: {{exact text from contract, max 60 words}}
-explanation: {{why this matters, 2-3 sentences}}
-suggestion: {{rewritten clause suggestion for HIGH/MEDIUM risks}}
-FINDING_END
-
----MISSING---
-List standard protections that are absent (one per line, starting with -).
-
----SUMMARY---
-• {{Most important thing to know}}
-• {{Second most important}}
-• {{Action item if any}}
+Focus areas: General Risk Assessment
+User jurisdiction: ${userCountry}
 
 Contract:
 ${contractText}`;

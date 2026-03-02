@@ -30,9 +30,12 @@ export function AnalysisTerminal({
     TERMINAL_STEPS.map(text => ({ text, status: 'waiting' }))
   );
   const [displayTexts, setDisplayTexts] = useState<string[]>(new Array(TERMINAL_STEPS.length).fill(''));
-  
-  // Store timeout IDs for cleanup
+
+  // Store timeout ID for cleanup
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Stable ref for onComplete so it never triggers effect restarts
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => { onCompleteRef.current = onComplete; });
 
   useEffect(() => {
     if (!isActive) {
@@ -48,7 +51,7 @@ export function AnalysisTerminal({
       if (currentStepIndex >= TERMINAL_STEPS.length) {
         // All steps completed
         timeoutRef.current = setTimeout(() => {
-          onComplete?.();
+          onCompleteRef.current?.();
         }, 800);
         return;
       }
@@ -97,12 +100,13 @@ export function AnalysisTerminal({
     typeNextChar();
 
     return () => {
-      // Clear any pending timeouts
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [isActive, onComplete]);
+  // Only re-run when isActive changes — onComplete is accessed via ref to avoid restarts
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   const getStepIcon = (status: TerminalStep['status'], index: number) => {
     if (status === 'completed') {
@@ -119,7 +123,7 @@ export function AnalysisTerminal({
     if (status === 'current') {
       return <span className="text-[#c8873a] mr-2">›</span>;
     }
-    return <span className="mr-2">  </span>;
+    return <span className="text-[#c8bfb5] mr-2">›</span>;
   };
 
   const getStepColor = (status: TerminalStep['status']) => {
@@ -142,7 +146,7 @@ export function AnalysisTerminal({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
-      className="w-full border border-[#e0d9ce] rounded-xl p-5 bg-[#fafaf9] font-mono text-[13px]"
+      className="w-full border border-[#e0d9ce] rounded-xl p-[20px_24px] bg-transparent font-mono text-[13px]"
       style={{ fontFamily: "'DM Mono', 'Courier New', monospace" }}
     >
       {steps.map((step, index) => (
@@ -154,9 +158,9 @@ export function AnalysisTerminal({
           className={`flex items-center ${getStepColor(step.status)} ${index > 0 ? 'mt-2' : ''}`}
         >
           {getStepIcon(step.status, index)}
-          <span>{displayTexts[index]}</span>
-          {step.status === 'current' && displayTexts[index] === step.text && (
-            <span className="inline-block w-2 h-4 bg-[#1a1714] ml-0.5 animate-pulse" />
+          <span>{displayTexts[index] || (step.status === 'waiting' ? step.text : '')}</span>
+          {step.status === 'current' && (
+            <span className="inline-block w-2 h-4 bg-[#c8873a] ml-0.5 animate-pulse" />
           )}
         </motion.div>
       ))}

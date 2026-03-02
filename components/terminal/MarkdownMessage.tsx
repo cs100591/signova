@@ -1,5 +1,4 @@
-'use client';
-
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -8,75 +7,30 @@ interface MarkdownMessageProps {
   isUser?: boolean;
 }
 
-export function MarkdownMessage({ content, isUser = false }: MarkdownMessageProps) {
-  // Use inherited colors for user messages (dark background), specific colors for assistant
-  const textColor = isUser ? 'text-inherit' : 'text-[#3a3530]';
-  const headingColor = isUser ? 'text-inherit' : 'text-[#1a1714]';
-  
+export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, isUser }) => {
   return (
-    <div className="prose prose-sm max-w-none">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h2: ({ children }) => (
-            <h2 className={`text-sm font-semibold ${headingColor} border-b border-[#f0ede8] pb-2 mt-4 mb-3`}>
-              {children}
-            </h2>
-          ),
-          h3: ({ children }) => (
-            <h3 className={`text-sm font-medium ${headingColor} mt-3 mb-2`}>
-              {children}
-            </h3>
-          ),
-          p: ({ children }) => (
-            <p className={`text-[13px] ${textColor} leading-[1.7] mb-3`}>
-              {children}
-            </p>
-          ),
-          strong: ({ children }) => (
-            <strong className={`font-semibold ${headingColor}`}>
-              {children}
-            </strong>
-          ),
-          ul: ({ children }) => (
-            <ul className="list-disc pl-4 mb-3 space-y-1">
-              {children}
-            </ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="list-decimal pl-4 mb-3 space-y-1">
-              {children}
-            </ol>
-          ),
-          li: ({ children }) => (
-            <li className={`text-[13px] ${textColor} leading-[1.7]`}>
-              {children}
-            </li>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className={`border-l-[3px] border-[#c8873a] pl-3 italic ${isUser ? 'text-inherit opacity-80' : 'text-[#6b7280]'} my-3`}>
-              {children}
-            </blockquote>
-          ),
-          code: ({ children, className }) => {
-            const isInline = !className;
-            return isInline ? (
-              <code className={`bg-[#f5f0e8] px-1.5 py-0.5 rounded text-xs font-mono ${isUser ? 'text-[#1a1714]' : 'text-[#1a1714]'}`}>
-                {children}
-              </code>
-            ) : (
-              <pre className="bg-[#1a1714] text-white p-3 rounded-lg overflow-x-auto my-3">
-                <code className="text-xs font-mono">{children}</code>
-              </pre>
-            );
-          },
-          hr: () => (
-            <hr className="border-t border-[#f0ede8] my-4" />
-          ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ node, ...props }) => <h1 className="text-[16px] font-bold text-[#1a1714] mb-3 pb-2 border-b border-[#f0ede8]" {...props} />,
+        h2: ({ node, ...props }) => <h2 className="text-[14px] font-bold text-[#1a1714] mb-3 pb-1 border-b border-[#f0ede8] mt-4" {...props} />,
+        h3: ({ node, ...props }) => <h3 className="text-[13px] font-semibold text-[#1a1714] mb-2 mt-3" {...props} />,
+        strong: ({ node, ...props }) => <strong className="text-[#1a1714] font-semibold" {...props} />,
+        ul: ({ node, ...props }) => <ul className="list-disc pl-5 my-2 space-y-1 text-[13px] text-[#3a3530]" {...props} />,
+        ol: ({ node, ...props }) => <ol className="list-decimal pl-5 my-2 space-y-1 text-[13px] text-[#3a3530]" {...props} />,
+        li: ({ node, ...props }) => <li className="pl-1" {...props} />,
+        blockquote: ({ node, ...props }) => (
+          <blockquote className="border-l-[3px] border-[#c8873a] pl-4 py-1 my-3 text-[#5a5248] italic bg-[#fdfaf5] rounded-r-md" {...props} />
+        ),
+        p: ({ node, ...props }) => <p className="text-[13px] text-[#3a3530] leading-[1.7] mb-3 last:mb-0" {...props} />,
+        hr: ({ node, ...props }) => <hr className="border-t border-[#f0ede8] my-4" {...props} />,
+        code: ({ node, ...props }) => <code className="bg-[#f5f0e8] px-1.5 py-0.5 rounded text-[#c8873a] font-mono text-[12px]" {...props} />,
+        a: ({ node, ...props }) => <a className="text-[#c8873a] hover:underline" target="_blank" rel="noreferrer" {...props} />,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   );
-}
+};
+
+export default MarkdownMessage;

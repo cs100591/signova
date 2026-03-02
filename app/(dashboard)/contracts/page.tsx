@@ -66,18 +66,36 @@ const getExpiryStatus = (expiryDate: string | null): { status: Contract['status'
   }
 };
 
-const contractTypes = ["All", "MSA", "NDA", "Employment", "Contractor", "Renewal", "Lease", "Service", "Other"];
+const contractTypes = ["All", "MSA", "NDA", "Employment", "Contractor", "Renewal", "Lease", "Service", "SaaS", "Partnership", "Other"];
 const contractStatuses = ["All", "Active", "Expiring Soon", "Expired", "Indefinite"];
+
+// Normalize contract type string to canonical key for icon matching
+const normalizeContractType = (type: string): string => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("nda") || t.includes("non-disclosure") || t.includes("confidentiality")) return "NDA";
+  if (t.includes("msa") || t.includes("master service")) return "MSA";
+  if (t.includes("employment") || t.includes("employee") || t.includes("offer letter")) return "Employment";
+  if (t.includes("contractor") || t.includes("independent contractor") || t.includes("freelance")) return "Contractor";
+  if (t.includes("lease") || t.includes("tenancy") || t.includes("rental") || t.includes("office")) return "Lease";
+  if (t.includes("renewal")) return "Renewal";
+  if (t.includes("internal")) return "Internal";
+  if (t.includes("partnership") || t.includes("joint venture")) return "Partnership";
+  if (t.includes("saas") || t.includes("software") || t.includes("license") || t.includes("subscription") || t.includes("platform")) return "SaaS";
+  if (t.includes("service") || t.includes("sow") || t.includes("statement of work")) return "Service";
+  return type;
+};
 
 // Helper function to get icon component based on contract type
 const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
   const iconProps = { width: 28, height: 28, className: isExpired ? "text-red-600" : "text-[#6B7280]" };
-  
+
   if (isExpired) {
     return <IconExpired {...iconProps} />;
   }
-  
-  switch (type) {
+
+  const normalized = normalizeContractType(type);
+
+  switch (normalized) {
     case "NDA":
       return <IconNDA {...iconProps} />;
     case "MSA":
@@ -193,8 +211,8 @@ export default function ContractsPage() {
         contract.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
         contract.description.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // Type filter
-      const matchesType = selectedType === "All" || contract.type === selectedType;
+      // Type filter — normalize both sides so "SaaS Subscription & Service Agreement" matches "SaaS"
+      const matchesType = selectedType === "All" || normalizeContractType(contract.type) === selectedType;
       
       // Status filter - calculate real status from expiry_date
       const expiryInfo = getExpiryStatus(contract.expiry_date);

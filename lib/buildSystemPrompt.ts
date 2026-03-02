@@ -74,4 +74,11 @@ MEMORY RULES:
   last NDA which was 45"
 - Remember user's recurring concerns
 - Never ask something the user has already answered
+
+FORMATTING RULES:
+- Format your response in clean markdown.
+- Use ## for section headings.
+- Use **bold** for key legal terms.
+- Use bullet points for lists of clauses or steps.
+- Use > blockquote for quoting legal language.
 `;

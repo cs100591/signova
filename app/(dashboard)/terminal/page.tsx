@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Send, FileText, Plus, History, Upload, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   WaitingRobot,
   ThinkingRobot,
+  ClearRobot,
+  RiskRobot
 } from "@/components/illustrations/RobotIllustrations";
 import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
 import { RiskScoreCard } from "@/components/terminal/RiskScoreCard";
@@ -46,7 +49,10 @@ const QUICK_QUESTIONS = [
   "What's missing from this contract?",
 ];
 
-export default function TerminalPage() {
+function TerminalPageInner() {
+  const searchParams = useSearchParams();
+  const contractIdParam = searchParams.get("contractId");
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [contractText, setContractText] = useState("");
@@ -56,6 +62,7 @@ export default function TerminalPage() {
   const [inputMode, setInputMode] = useState<"paste" | "upload">("paste");
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [linkedContractId, setLinkedContractId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,8 +72,9 @@ export default function TerminalPage() {
   }, [messages, isAnalyzing]);
 
   // ── Core analysis function ──────────────────────────────────────────────
-  // Accept explicit text so React async state is never stale
-  const startContractAnalysis = async (textToAnalyze: string) => {
+  // Accept explicit text so React async state is never stale.
+  // contractIdToSave: if set, PATCH the contract with results after analysis.
+  const startContractAnalysis = async (textToAnalyze: string, contractIdToSave?: string | null) => {
     if (!textToAnalyze || textToAnalyze.trim().length < 20) {
       setIsAnalyzing(false);
       setMessages(prev => [...prev, {
@@ -116,6 +124,29 @@ export default function TerminalPage() {
         analysisResult: result,
         timestamp: new Date(),
       }]);
+
+      // Save analysis back to the contract if we came from a contract page
+      if (contractIdToSave) {
+        try {
+          await fetch(`/api/contracts/${contractIdToSave}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              risk_score: result.riskScore,
+              analysis_result: {
+                riskScore: result.riskScore,
+                verdict: result.riskVerdict,
+                findings: result.findings,
+                missing: result.missing,
+                summary: result.summary,
+              },
+            }),
+          });
+          console.log("[Terminal] Analysis saved to contract", contractIdToSave);
+        } catch (saveErr) {
+          console.error("[Terminal] Failed to save analysis to contract:", saveErr);
+        }
+      }
     } catch (error: any) {
       console.error("[Terminal] Analysis error:", error);
 
@@ -133,6 +164,56 @@ export default function TerminalPage() {
       }]);
     }
   };
+
+  // ── Auto-load contract from URL param ──────────────────────────────────
+  useEffect(() => {
+    if (!contractIdParam) return;
+
+    setLinkedContractId(contractIdParam);
+
+    const autoLoad = async () => {
+      try {
+        const res = await fetch(`/api/contracts/${contractIdParam}`);
+        if (!res.ok) return;
+        const contract = await res.json();
+
+        // Build analysis text from available contract data
+        const parts: string[] = [];
+        if (contract.name) parts.push(`Contract: ${contract.name}`);
+        if (contract.type) parts.push(`Type: ${contract.type}`);
+        if (contract.party_a && contract.party_b) parts.push(`Parties: ${contract.party_a} and ${contract.party_b}`);
+        if (contract.governing_law) parts.push(`Governing Law: ${contract.governing_law}`);
+        if (contract.effective_date) parts.push(`Effective Date: ${contract.effective_date}`);
+        if (contract.expiry_date) parts.push(`Expiry Date: ${contract.expiry_date}`);
+        if (contract.summary) parts.push(`\nSummary:\n${contract.summary}`);
+
+        if (parts.length === 0) return;
+
+        const text = parts.join("\n");
+        const name = contract.name || "Contract";
+
+        setContractText(text);
+        setContractName(name);
+        setShowContractInput(false);
+        setIsAnalyzing(true);
+
+        setMessages([{
+          id: Date.now().toString(),
+          role: "user",
+          content: `Analyze this contract: ${name}`,
+          timestamp: new Date(),
+        }]);
+
+        await startContractAnalysis(text, contractIdParam);
+      } catch (err) {
+        console.error("[Terminal] Failed to auto-load contract:", err);
+        setIsAnalyzing(false);
+      }
+    };
+
+    autoLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Regular chat (with contract context) ───────────────────────────────
   const handleRegularChat = async (text: string) => {
@@ -185,7 +266,7 @@ export default function TerminalPage() {
 
     // If we have contract text and haven't analysed yet → run analysis
     if (contractText && !analysisComplete) {
-      await startContractAnalysis(contractText);
+      await startContractAnalysis(contractText, linkedContractId);
     } else {
       // Follow-up question or general chat
       await handleRegularChat(text);
@@ -276,6 +357,17 @@ export default function TerminalPage() {
   // ── Analysis result cards component ─────────────────────────────────────
   const AnalysisResultCards = ({ result }: { result: AnalysisResult }) => (
     <div className="w-full space-y-4">
+      {/* Dynamic Robot based on Risk Score */}
+      <div className="flex justify-center mb-6">
+        {result.riskScore <= 40 ? (
+          <ClearRobot size={140} />
+        ) : result.riskScore <= 70 ? (
+          <WaitingRobot size={140} />
+        ) : (
+          <RiskRobot size={140} />
+        )}
+      </div>
+
       {/* Risk Score */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -394,11 +486,10 @@ export default function TerminalPage() {
                     <button
                       key={mode}
                       onClick={() => setInputMode(mode)}
-                      className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
-                        inputMode === mode
+                      className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${inputMode === mode
                           ? "bg-[#1A1A1A] text-white"
                           : "bg-[#F3F4F6] text-[#374151] hover:bg-[#E5E7EB]"
-                      }`}
+                        }`}
                     >
                       {mode === "paste" ? "Paste Text" : "Upload PDF"}
                     </button>
@@ -489,7 +580,7 @@ export default function TerminalPage() {
               ) : (
                 <div className="max-w-3xl mx-auto space-y-4">
                   {/* Message list */}
-                  {messages.map((message, index) => (
+                  {messages.map((message) => (
                     <div
                       key={message.id}
                       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -502,11 +593,10 @@ export default function TerminalPage() {
                       ) : (
                         // Regular text message
                         <div
-                          className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                            message.role === "user"
+                          className={`max-w-[80%] px-4 py-3 rounded-2xl ${message.role === "user"
                               ? "bg-[#1A1A1A] text-white"
                               : "bg-white border border-[#E5E7EB] text-[#1A1A1A]"
-                          }`}
+                            }`}
                         >
                           <MarkdownMessage
                             content={message.content}
@@ -524,7 +614,7 @@ export default function TerminalPage() {
                   {isAnalyzing && (
                     <div className="flex flex-col items-center py-8">
                       <ThinkingRobot size={160} className="mb-4" />
-                      <AnalysisTerminal isActive={true} onComplete={() => {}} />
+                      <AnalysisTerminal isActive={true} onComplete={() => { }} />
                     </div>
                   )}
 
@@ -600,5 +690,13 @@ export default function TerminalPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TerminalPage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="w-6 h-6 border-2 border-[#F59E0B] border-t-transparent rounded-full animate-spin" /></div>}>
+      <TerminalPageInner />
+    </Suspense>
   );
 }

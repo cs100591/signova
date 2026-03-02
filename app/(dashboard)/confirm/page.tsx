@@ -24,7 +24,7 @@ interface ContractData {
 
 const contractTypes = [
   "MSA",
-  "NDA", 
+  "NDA",
   "Employment",
   "Contractor",
   "Renewal",
@@ -84,24 +84,24 @@ export default function ConfirmPage() {
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
-    
+
     if (!editedData?.contract_name?.trim()) {
       newErrors.contract_name = "Contract name is required";
     }
-    
+
     if (!editedData?.contract_type) {
       newErrors.contract_type = "Contract type is required";
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
     if (!validate() || !editedData) return;
-    
+
     setSaving(true);
-    
+
     try {
       // Parse amount with NaN check
       let amount = null;
@@ -110,7 +110,7 @@ export default function ConfirmPage() {
         const parsed = cleaned ? parseFloat(cleaned) : null;
         amount = parsed && !isNaN(parsed) ? parsed : null;
       }
-      
+
       const res = await fetch("/api/contracts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -128,7 +128,7 @@ export default function ConfirmPage() {
           governing_law: editedData.governing_law,
         }),
       });
-      
+
       if (!res.ok) {
         // Try to parse error response
         let errorMessage = `Server error: ${res.status} ${res.statusText}`;
@@ -148,15 +148,17 @@ export default function ConfirmPage() {
         }
         throw new Error(errorMessage);
       }
-      
+
       // Clear localStorage
       localStorage.removeItem("uploadedContract");
-      
-      // Redirect to contracts list
-      router.push("/contracts");
+
+      // Redirect to contracts list immediately
+      window.location.href = "/contracts";
     } catch (error: any) {
       console.error('[Confirm] Save error:', error);
       alert(`Failed to save contract: ${error.message || "Unknown error"}`);
+    } finally {
+      // Always stop the saving spinner if the navigation hasn't kicked in
       setSaving(false);
     }
   };
@@ -201,7 +203,7 @@ export default function ConfirmPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to upload
           </button>
-          
+
           <div className="text-center">
             <h1 className="text-[28px] font-semibold text-[#1A1A1A] mb-2">
               Review Contract Details
@@ -233,9 +235,8 @@ export default function ConfirmPage() {
                 type="text"
                 value={editedData.contract_name}
                 onChange={(e) => handleChange("contract_name", e.target.value)}
-                className={`w-full px-4 py-3 border rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all ${
-                  errors.contract_name ? "border-red-300 bg-red-50" : "border-[#E5E7EB]"
-                }`}
+                className={`w-full px-4 py-3 border rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all ${errors.contract_name ? "border-red-300 bg-red-50" : "border-[#E5E7EB]"
+                  }`}
                 placeholder="Enter contract name"
               />
               {errors.contract_name && (
@@ -252,9 +253,8 @@ export default function ConfirmPage() {
               <select
                 value={editedData.contract_type}
                 onChange={(e) => handleChange("contract_type", e.target.value)}
-                className={`w-full px-4 py-3 border rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all bg-white ${
-                  errors.contract_type ? "border-red-300 bg-red-50" : "border-[#E5E7EB]"
-                }`}
+                className={`w-full px-4 py-3 border rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all bg-white ${errors.contract_type ? "border-red-300 bg-red-50" : "border-[#E5E7EB]"
+                  }`}
               >
                 {contractTypes.map((type) => (
                   <option key={type} value={type}>{type}</option>
@@ -277,7 +277,7 @@ export default function ConfirmPage() {
                   placeholder="Your company name"
                 />
               </div>
-              
+
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[#374151] mb-2">
                   <Building2 className="w-4 h-4 text-[#9CA3AF]" />
@@ -308,7 +308,7 @@ export default function ConfirmPage() {
                   placeholder="e.g. 50000"
                 />
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-[#374151] mb-2 block">Currency</label>
                 <select
@@ -339,7 +339,7 @@ export default function ConfirmPage() {
                   className="w-full px-4 py-3 border border-[#E5E7EB] rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-[#F59E0B]/20 focus:border-[#F59E0B] transition-all"
                 />
               </div>
-              
+
               <div>
                 <label className="flex items-center gap-2 text-sm font-medium text-[#374151] mb-2">
                   <Calendar className="w-4 h-4 text-[#9CA3AF]" />

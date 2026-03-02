@@ -60,15 +60,17 @@ export const TerminalAnimation = ({
 
   return (
     <motion.div
-      className="terminal rounded-xl overflow-hidden border border-[#E6DCCA]"
+      className="terminal rounded-xl overflow-hidden"
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -24 }}
       transition={{ duration: 0.4 }}
       style={{
         background: "transparent",
-        padding: "24px",
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        border: "1px solid #e0d9ce",
+        borderRadius: "12px",
+        padding: "20px 24px",
+        fontFamily: "'DM Mono', monospace",
         fontSize: "13px",
         color: "#3a3530",
         minHeight: "280px",
@@ -88,9 +90,9 @@ export const TerminalAnimation = ({
             key={i}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex items-center gap-2 text-[#16a34a]"
+            className="flex items-center gap-2 text-[#3a3530]"
           >
-            <span>✓</span>
+            <span className="text-[#16a34a]">✓</span>
             <span>{steps[i]}</span>
           </motion.div>
         ))}
@@ -101,15 +103,23 @@ export const TerminalAnimation = ({
         <div className="flex items-center gap-2"
         >
           <span className="text-[#c8873a]">›</span>
-          <span>{displayedText}</span>
+          <span className="text-[#c8873a]">{displayedText}</span>
           {/* Cursor blinking */}
           <motion.span
             animate={{ opacity: [1, 0, 1] }}
             transition={{ duration: 0.8, repeat: Infinity }}
-            className="inline-block w-2 h-3.5 bg-[#1a1714]"
+            className="inline-block w-2 h-3.5 bg-[#c8873a]"
           />
         </div>
       )}
+
+      {/* Pending steps */}
+      {steps.slice(currentStep + 1).map((step, idx) => (
+        <div key={idx} className="flex items-center gap-2 mt-2 text-[#c8bfb5]">
+          <span className="opacity-0">›</span>
+          <span>{step}</span>
+        </div>
+      ))}
 
       {/* Completion message after all steps */}
       {completedSteps.length === steps.length && (
