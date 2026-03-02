@@ -9,7 +9,9 @@ import {
   SlidersHorizontal, 
   Search, 
   MoreVertical,
-  Loader2
+  Loader2,
+  Check,
+  ChevronRight
 } from "lucide-react";
 import { 
   EmptyContracts, 
@@ -45,6 +47,7 @@ interface Contract {
   owner_initial: string;
   status: 'active' | 'expiring_soon' | 'expired' | 'indefinite';
   created_at: string;
+  workspace_id?: string | null;
 }
 
 // Helper function: Calculate expiry status
@@ -132,72 +135,89 @@ export default function ContractsPage() {
   const [selectedType, setSelectedType] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [workspaces, setWorkspaces] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [moveMenuOpenId, setMoveMenuOpenId] = useState<string | null>(null);
+  const [isMoving, setIsMoving] = useState<string | null>(null);
 
   const tabs = ["All Contracts", "Drafts", "Archived"];
 
-  // Fetch contracts from API
+  // Fetch workspaces
   useEffect(() => {
-    const fetchContracts = async () => {
+    const fetchWorkspaces = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
-        
-        // Add timeout to prevent infinite loading
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        const workspaceId = localStorage.getItem('activeWorkspaceId');
-        const url = workspaceId ? `/api/contracts?workspaceId=${workspaceId}` : '/api/contracts';
-
-        const response = await fetch(url, {
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (response.status === 401) {
-          // Redirect to login if not authenticated
-          router.push('/login');
-          return;
+        const res = await fetch("/api/workspaces");
+        if (res.ok) {
+          const data = await res.json();
+          setWorkspaces(Array.isArray(data) ? data : []);
         }
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Failed to fetch contracts: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        // Transform data to match Contract interface
-        const transformedContracts: Contract[] = (data || []).map((item: any) => ({
-          id: item.id,
-          name: item.name || item.title || 'Untitled Contract',
-          type: item.type || 'Other',
-          description: item.summary || item.description || 'No description available',
-          amount: item.amount ? `$${item.amount}` : null,
-          expiry_date: item.expiry_date,
-          owner: item.owner || 'You',
-          owner_initial: item.owner?.charAt(0).toUpperCase() || 'Y',
-          status: item.status || 'active',
-          created_at: item.created_at,
-        }));
-        
-        setContracts(transformedContracts);
-      } catch (err: any) {
-        console.error('Error fetching contracts:', err);
-        if (err.name === 'AbortError') {
-          setError('Request timed out. Please try again.');
-        } else {
-          setError(err.message || 'Failed to load contracts');
-        }
-      } finally {
-        setIsLoading(false);
+      } catch (e) {
+        console.error("Failed to fetch workspaces:", e);
       }
     };
+    fetchWorkspaces();
+  }, []);
 
+  // Fetch contracts from API
+  const fetchContracts = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const workspaceId = localStorage.getItem('activeWorkspaceId');
+      const url = workspaceId ? `/api/contracts?workspaceId=${workspaceId}` : '/api/contracts';
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.status === 401) {
+        router.push('/login');
+        return;
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch contracts: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      const transformedContracts: Contract[] = (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name || item.title || 'Untitled Contract',
+        type: item.type || 'Other',
+        description: item.summary || item.description || 'No description available',
+        amount: item.amount ? `$${item.amount}` : null,
+        expiry_date: item.expiry_date,
+        owner: item.owner || 'You',
+        owner_initial: item.owner?.charAt(0).toUpperCase() || 'Y',
+        status: item.status || 'active',
+        created_at: item.created_at,
+        workspace_id: item.workspace_id
+      }));
+      
+      setContracts(transformedContracts);
+    } catch (err: any) {
+      console.error('Error fetching contracts:', err);
+      if (err.name === 'AbortError') {
+        setError('Request timed out. Please try again.');
+      } else {
+        setError(err.message || 'Failed to load contracts');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchContracts();
 
     const handleWorkspaceChange = () => {
@@ -209,6 +229,43 @@ export default function ContractsPage() {
       window.removeEventListener('workspaceChange', handleWorkspaceChange);
     };
   }, [router]);
+
+  const handleMoveToWorkspace = async (contractId: string, workspaceId: string | null) => {
+    try {
+      setIsMoving(contractId);
+      const res = await fetch(`/api/contracts/${contractId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspace_id: workspaceId === 'personal' ? null : workspaceId }),
+      });
+      
+      if (!res.ok) {
+        throw new Error("Failed to move contract");
+      }
+      
+      // Tell workspace switcher to refetch counts
+      window.dispatchEvent(new Event('workspaceUpdate'));
+      
+      // Update local state or refetch based on active view
+      const activeWorkspaceId = localStorage.getItem('activeWorkspaceId');
+      
+      if ((activeWorkspaceId === 'personal' && workspaceId !== 'personal') || 
+          (activeWorkspaceId !== 'personal' && workspaceId !== activeWorkspaceId)) {
+        // If contract was moved out of current view, remove it from list
+        setContracts(contracts.filter(c => c.id !== contractId));
+      } else {
+        fetchContracts();
+      }
+      
+      setMoveMenuOpenId(null);
+      setOpenMenuId(null);
+    } catch (e) {
+      console.error("Move error:", e);
+      alert("Failed to move contract");
+    } finally {
+      setIsMoving(null);
+    }
+  };
 
   // Filter contracts
   const filteredContracts = useMemo(() => {
@@ -593,6 +650,7 @@ export default function ContractsPage() {
                         e.preventDefault();
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === contract.id ? null : contract.id);
+                        setMoveMenuOpenId(null);
                       }}
                       className="p-2 bg-white rounded-lg shadow-md hover:bg-[#F3F4F6]"
                     >
@@ -600,7 +658,7 @@ export default function ContractsPage() {
                     </button>
                     
                     {openMenuId === contract.id && (
-                      <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-[#E5E7EB] z-10">
+                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-[#E5E7EB] z-20">
                         <Link href={`/contracts/${contract.id}`}>
                           <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] first:rounded-t-lg">
                             View
@@ -611,6 +669,65 @@ export default function ContractsPage() {
                             Analyze
                           </button>
                         </Link>
+                        
+                        {/* Move to Workspace */}
+                        <div className="relative group/move">
+                          <button 
+                            className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6] flex items-center justify-between"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setMoveMenuOpenId(moveMenuOpenId === contract.id ? null : contract.id);
+                            }}
+                          >
+                            <span>Move to Workspace</span>
+                            <ChevronRight className="w-3.5 h-3.5 text-[#9CA3AF]" />
+                          </button>
+                          
+                          {moveMenuOpenId === contract.id && (
+                            <div className="absolute right-full top-0 mr-1 w-56 bg-white rounded-lg shadow-lg border border-[#E5E7EB] py-1 z-30">
+                              <div className="px-3 py-1.5 border-b border-[#E5E7EB] mb-1">
+                                <span className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wider">Move to...</span>
+                              </div>
+                              
+                              <button
+                                disabled={isMoving === contract.id || contract.workspace_id === null}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleMoveToWorkspace(contract.id, 'personal');
+                                }}
+                                className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === null ? 'text-[#9CA3AF] bg-gray-50' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
+                              >
+                                <div className="w-5 flex justify-center">
+                                  {contract.workspace_id === null && <Check className="w-3.5 h-3.5 text-[#F59E0B]" />}
+                                </div>
+                                Personal Space
+                                {isMoving === contract.id && contract.workspace_id !== null && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                              </button>
+                              
+                              {workspaces.map(ws => (
+                                <button
+                                  key={ws.id}
+                                  disabled={isMoving === contract.id || contract.workspace_id === ws.id}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleMoveToWorkspace(contract.id, ws.id);
+                                  }}
+                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${contract.workspace_id === ws.id ? 'text-[#9CA3AF] bg-gray-50' : 'text-[#374151] hover:bg-[#F3F4F6]'}`}
+                                >
+                                  <div className="w-5 flex justify-center">
+                                    {contract.workspace_id === ws.id && <Check className="w-3.5 h-3.5 text-[#F59E0B]" />}
+                                  </div>
+                                  <span className="truncate">{ws.name}</span>
+                                  {isMoving === contract.id && contract.workspace_id !== ws.id && <Loader2 className="w-3 h-3 animate-spin ml-auto" />}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                           Archive
                         </button>
