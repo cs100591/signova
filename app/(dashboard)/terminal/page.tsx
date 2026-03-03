@@ -76,7 +76,7 @@ function TerminalPageInner() {
   // ── Core analysis function ──────────────────────────────────────────────
   // Accept explicit text so React async state is never stale.
   // contractIdToSave: if set, PATCH the contract with results after analysis.
-  const startContractAnalysis = async (textToAnalyze: string, contractIdToSave?: string | null) => {
+  const startContractAnalysis = async (textToAnalyze: string, contractIdToSave?: string | null, selectedParty?: string | null) => {
     if (!textToAnalyze || textToAnalyze.trim().length < 20) {
       setIsAnalyzing(false);
       setMessages(prev => [...prev, {
@@ -98,6 +98,7 @@ function TerminalPageInner() {
         body: JSON.stringify({
           contractText: textToAnalyze,
           userCountry: "United States",
+          ...(selectedParty ? { selectedParty } : {}),
         }),
       });
 
@@ -206,7 +207,16 @@ function TerminalPageInner() {
           timestamp: new Date(),
         }]);
 
-        await startContractAnalysis(text, contractIdParam);
+        // Read selectedParty from localStorage if available
+        let storedParty: string | null = null;
+        try {
+          const stored = localStorage.getItem("uploadedContract");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed.selectedParty) storedParty = parsed.selectedParty;
+          }
+        } catch {}
+        await startContractAnalysis(text, contractIdParam, storedParty);
       } catch (err) {
         console.error("[Terminal] Failed to auto-load contract:", err);
         setIsAnalyzing(false);

@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { contractText, contractId } = body;
+    const { contractText, contractId, selectedParty } = body;
 
     if (!contractText || contractText.trim().length < 20) {
       return NextResponse.json(
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     // Fetch user profile
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('country, preferred_language, contract_types, analyses_used, annual_revenue_range')
+      .select('country, preferred_language, contract_types, analyses_used, annual_revenue_range, company_size, analysis_style')
       .eq('id', user.id)
       .single();
 
@@ -34,6 +34,8 @@ export async function POST(request: Request) {
       language: profileData?.preferred_language,
       contractTypes: profileData?.contract_types || [],
       annual_revenue_range: profileData?.annual_revenue_range || null,
+      company_size: profileData?.company_size || null,
+      analysis_style: profileData?.analysis_style || 'balanced',
       contractHistory: [],
       commonConcerns: []
     };
@@ -96,7 +98,8 @@ export async function POST(request: Request) {
     const result = await analyzeContract(contractText, userProfileContext, {
       contractId: contractId || null,
       userId: user.id,
-      supabase
+      supabase,
+      selectedParty: selectedParty || null,
     });
     return NextResponse.json(result);
   } catch (error: any) {
