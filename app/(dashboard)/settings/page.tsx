@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Loader2,
   CheckCircle2,
+  Check,
   Mail,
 } from "lucide-react";
 import WorkspaceManagement from "@/components/settings/workspace-management";
