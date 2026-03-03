@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { analyzeContractFull } from '@/lib/ai';
+import { analyzeContract } from '@/lib/analyzeContract.js';
 import { createSupabaseServerClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { contractText } = body;
+    const { contractText, contractId } = body;
 
     if (!contractText || contractText.trim().length < 20) {
       return NextResponse.json(
@@ -24,15 +24,16 @@ export async function POST(request: Request) {
     // Fetch user profile
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('country, preferred_language, contract_types, analyses_used')
+      .select('country, preferred_language, contract_types, analyses_used, annual_revenue_range')
       .eq('id', user.id)
       .single();
-      
+
     const userProfileContext = {
       region: profileData?.country,
       jurisdiction: profileData?.country,
       language: profileData?.preferred_language,
       contractTypes: profileData?.contract_types || [],
+      annual_revenue_range: profileData?.annual_revenue_range || null,
       contractHistory: [],
       commonConcerns: []
     };
@@ -92,7 +93,11 @@ export async function POST(request: Request) {
       });
     }
 
-    const result = await analyzeContractFull(contractText, userProfileContext);
+    const result = await analyzeContract(contractText, userProfileContext, {
+      contractId: contractId || null,
+      userId: user.id,
+      supabase
+    });
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('[AI Analyze] Error:', error);
