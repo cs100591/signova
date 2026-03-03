@@ -195,8 +195,8 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
                 className="overflow-hidden"
               >
-                <div className="bg-[#1a1714] text-white rounded-xl p-4 text-sm relative">
-                  <div className="absolute top-0 left-4 -mt-2 w-4 h-4 bg-[#1a1714] rotate-45 transform" />
+                <div className="bg-white border border-[#e0d9ce] rounded-xl px-6 py-5 text-sm relative">
+                  <div className="absolute top-0 left-4 -mt-2 w-4 h-4 bg-white border-t border-l border-[#e0d9ce] rotate-45 transform" />
                   <div className="relative z-10">
                     <MarkdownMessage content={explanation} isUser={false} />
                   </div>
