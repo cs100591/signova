@@ -141,6 +141,7 @@ export default function ContractsPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [moveMenuOpenId, setMoveMenuOpenId] = useState<string | null>(null);
   const [isMoving, setIsMoving] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const tabs = ["All Contracts", "Drafts", "Archived"];
 
@@ -229,6 +230,23 @@ export default function ContractsPage() {
       window.removeEventListener('workspaceChange', handleWorkspaceChange);
     };
   }, [router]);
+
+  const handleDelete = async (contractId: string) => {
+    if (!confirm("Delete this contract? This cannot be undone.")) return;
+    try {
+      setIsDeleting(contractId);
+      const res = await fetch(`/api/contracts/${contractId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete contract");
+      setContracts(contracts.filter(c => c.id !== contractId));
+      setOpenMenuId(null);
+      window.dispatchEvent(new Event('workspaceUpdate'));
+    } catch (e) {
+      console.error("Delete error:", e);
+      alert("Failed to delete contract");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const handleMoveToWorkspace = async (contractId: string, workspaceId: string | null) => {
     try {
@@ -725,7 +743,12 @@ export default function ContractsPage() {
                         <button className="w-full px-4 py-2 text-left text-sm text-[#374151] hover:bg-[#F3F4F6]">
                           Archive
                         </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 last:rounded-b-lg">
+                        <button
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 last:rounded-b-lg flex items-center gap-2"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(contract.id); }}
+                          disabled={isDeleting === contract.id}
+                        >
+                          {isDeleting === contract.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                           Delete
                         </button>
                       </div>
