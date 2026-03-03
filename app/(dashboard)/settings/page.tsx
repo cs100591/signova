@@ -30,6 +30,9 @@ interface Profile {
   country: string;
   preferred_language: string;
   plan: string;
+  company_size: string;
+  contract_types: string[];
+  analysis_style: string;
 }
 
 interface TeamMember {
@@ -61,6 +64,9 @@ export default function SettingsPage() {
     country: "",
     preferred_language: "EN",
     plan: "free",
+    company_size: "",
+    contract_types: [],
+    analysis_style: "balanced",
   });
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -84,7 +90,7 @@ export default function SettingsPage() {
 
       const { data: profileData } = await supabaseClient
         .from("profiles")
-        .select("full_name, country, preferred_language, plan")
+        .select("full_name, country, preferred_language, plan, company_size, contract_types, analysis_style")
         .eq("id", user.id)
         .single();
 
@@ -94,6 +100,9 @@ export default function SettingsPage() {
         country: profileData?.country || "",
         preferred_language: profileData?.preferred_language || "EN",
         plan: profileData?.plan || "free",
+        company_size: profileData?.company_size || "",
+        contract_types: profileData?.contract_types || [],
+        analysis_style: profileData?.analysis_style || "balanced",
       });
 
       // Load team members (workspace_members for active workspace)
@@ -124,6 +133,9 @@ export default function SettingsPage() {
           full_name: profile.full_name,
           country: profile.country,
           preferred_language: profile.preferred_language,
+          company_size: profile.company_size || null,
+          contract_types: profile.contract_types,
+          analysis_style: profile.analysis_style,
           updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
@@ -302,6 +314,87 @@ export default function SettingsPage() {
                         <option value="ZH_TW">中文 (繁體)</option>
                         <option value="MS">Bahasa Malaysia</option>
                       </select>
+                    </div>
+
+                    {/* AI Preferences */}
+                    <div className="pt-4 border-t border-[#F3F4F6]">
+                      <h4 className="text-sm font-semibold text-[#1A1A1A] mb-4">AI Preferences</h4>
+
+                      <div className="space-y-4">
+                        {/* Company size */}
+                        <div>
+                          <label className="block text-sm text-[#6B7280] mb-1">I am a...</label>
+                          <select
+                            value={profile.company_size}
+                            onChange={(e) => setProfile(p => ({ ...p, company_size: e.target.value }))}
+                            className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#F59E0B]"
+                          >
+                            <option value="">Select...</option>
+                            <option value="individual">Individual / Freelancer</option>
+                            <option value="small_business">Small Business (&lt;10 people)</option>
+                            <option value="sme">SME (10–100 people)</option>
+                            <option value="enterprise">Enterprise (100+ people)</option>
+                          </select>
+                        </div>
+
+                        {/* Contract types */}
+                        <div>
+                          <label className="block text-sm text-[#6B7280] mb-2">Contract types I deal with</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { id: "employment", label: "Employment" },
+                              { id: "freelance", label: "Freelance / Contractor" },
+                              { id: "nda", label: "NDA / Confidentiality" },
+                              { id: "lease", label: "Lease / Rental" },
+                              { id: "saas", label: "SaaS / Software" },
+                              { id: "business", label: "Business / Vendor" },
+                              { id: "other", label: "Other" },
+                            ].map((type) => {
+                              const checked = profile.contract_types.includes(type.id);
+                              return (
+                                <button
+                                  key={type.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setProfile(p => ({
+                                      ...p,
+                                      contract_types: checked
+                                        ? p.contract_types.filter(t => t !== type.id)
+                                        : [...p.contract_types, type.id],
+                                    }))
+                                  }
+                                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm text-left transition-all ${
+                                    checked
+                                      ? "bg-[#FEF3C7] border-[#F59E0B] text-[#B45309]"
+                                      : "bg-white border-[#E5E7EB] text-[#374151] hover:border-[#F59E0B]"
+                                  }`}
+                                >
+                                  <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center ${
+                                    checked ? "bg-[#F59E0B] border-[#F59E0B]" : "border-[#D1D5DB]"
+                                  }`}>
+                                    {checked && <Check className="w-3 h-3 text-white" />}
+                                  </div>
+                                  {type.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Analysis style */}
+                        <div>
+                          <label className="block text-sm text-[#6B7280] mb-2">Analysis style</label>
+                          <select
+                            value={profile.analysis_style}
+                            onChange={(e) => setProfile(p => ({ ...p, analysis_style: e.target.value }))}
+                            className="w-full px-4 py-2 border border-[#E5E7EB] rounded-lg focus:outline-none focus:border-[#F59E0B]"
+                          >
+                            <option value="flag_everything">Flag everything — every risk, even minor</option>
+                            <option value="balanced">Balanced — important risks only (default)</option>
+                            <option value="dealbreakers_only">Deal-breakers only — serious issues only</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-3 pt-2">
