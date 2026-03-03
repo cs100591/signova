@@ -12,8 +12,8 @@ import {
   CheckCircle2,
   Mail,
 } from "lucide-react";
-import UsageStatsPanel from "@/components/usage-stats";
 import WorkspaceManagement from "@/components/settings/workspace-management";
+import SubscriptionManager from "@/components/settings/subscription-manager";
 import { supabaseClient } from "@/lib/supabase";
 
 const settingsTabs = [
@@ -213,7 +213,7 @@ export default function SettingsPage() {
 
           {/* Content */}
           <div className="lg:col-span-2">
-            {activeTab === "billing" && <UsageStatsPanel />}
+            {activeTab === "billing" && <SubscriptionManager />}
 
             {activeTab === "profile" && (
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">

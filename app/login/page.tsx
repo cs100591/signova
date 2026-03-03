@@ -12,12 +12,21 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams?.get('redirect');
+  const errorParam = searchParams?.get('error');
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showVerifyModal, setShowVerifyModal] = useState(false);
+
+  useEffect(() => {
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
+    }
+  }, [errorParam]);
+
   
   const [formData, setFormData] = useState({
     email: "",
@@ -93,18 +102,24 @@ function LoginForm() {
         const { data, error: signUpError } = await supabaseClient.auth.signUp({
           email: formData.email,
           password: formData.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+          },
         });
 
         if (signUpError) throw signUpError;
 
         if (data.user?.identities?.length === 0) {
           setError("An account with this email already exists. Please sign in.");
-        } else {
-          setSuccess("Account created! You can now sign in.");
+        } else if (data.session) {
+          // If email confirmation is disabled in Supabase, session is returned immediately
+          setSuccess("Account created successfully! Redirecting...");
           setTimeout(() => {
-            setIsLogin(true);
-            setSuccess("");
-          }, 2000);
+            checkOnboardingAndRedirect(data.user?.id);
+          }, 800);
+        } else {
+          // Normal flow where email confirmation is required
+          setShowVerifyModal(true);
         }
       }
     } catch (err: any) {
@@ -297,6 +312,35 @@ function LoginForm() {
           )}
         </motion.div>
       </div>
+
+      {/* Verify Email Modal */}
+      {showVerifyModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl text-center border border-[#ddd5c8]"
+          >
+            <div className="w-12 h-12 bg-[#f5f0e8] text-[#c8873a] rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-serif text-[#1a1714] mb-2">Check your email</h3>
+            <p className="text-[#7a7168] text-sm mb-6">
+              We've sent a verification link to <span className="font-medium text-[#1a1714]">{formData.email}</span>. Please click the link to verify your account.
+            </p>
+            <button
+              onClick={() => {
+                setShowVerifyModal(false);
+                setIsLogin(true);
+                setFormData({ ...formData, password: "", confirmPassword: "" });
+              }}
+              className="w-full py-3 bg-[#1a1714] text-[#f5f0e8] rounded-xl font-medium hover:bg-[#2e2a26] transition-all"
+            >
+              Back to Sign In
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="py-6 text-center">
