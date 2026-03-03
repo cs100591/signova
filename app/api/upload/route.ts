@@ -4,6 +4,7 @@ import { extractMetadata } from '@/lib/ai';
 import { uploadFile } from '@/lib/r2';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { detectDuplicate } from '@/lib/duplicateDetect';
+import { canUploadContract } from '@/lib/usage';
 
 export async function POST(request: Request) {
   try {
@@ -13,6 +14,24 @@ export async function POST(request: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // ── QUOTA CHECK — must pass before any processing ──────────────
+    const quotaCheck = await canUploadContract(user.id);
+    if (!quotaCheck.allowed) {
+      const { getUserUsage } = await import('@/lib/usage');
+      const usage = await getUserUsage(user.id);
+      return NextResponse.json(
+        {
+          error: 'CONTRACT_LIMIT_REACHED',
+          message: quotaCheck.reason || 'You have reached your plan contract limit.',
+          current: usage.contractCount,
+          limit: usage.contractLimit,
+          upgrade_url: '/settings/billing',
+        },
+        { status: 403 }
+      );
+    }
+    // ───────────────────────────────────────────────────────────────
 
     const formData = await request.formData();
     const file = formData.get('file') as File;

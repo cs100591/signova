@@ -14,6 +14,7 @@ export default function UploadPage() {
   const [dragActive, setDragActive] = useState(false);
   const [duplicateData, setDuplicateData] = useState<any>(null);
   const [contractData, setContractData] = useState<any>(null);
+  const [quotaData, setQuotaData] = useState<{ current: number; limit: number } | null>(null);
   const router = useRouter();
 
   // Detect file type and return appropriate status messages
@@ -85,6 +86,12 @@ export default function UploadPage() {
       
       if (!res.ok) {
         const errorData = await res.json();
+        if (errorData.error === 'CONTRACT_LIMIT_REACHED') {
+          setQuotaData({ current: errorData.current, limit: errorData.limit });
+          setIsUploading(false);
+          setUploadProgress(0);
+          return;
+        }
         throw new Error(errorData.details || errorData.error || "Upload failed");
       }
       
@@ -165,7 +172,34 @@ export default function UploadPage() {
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        {duplicateData ? (
+        {quotaData ? (
+          /* ── Storage limit reached ── */
+          <div className="py-4 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#fef3c7] flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-7 h-7 text-[#d97706]" />
+            </div>
+            <h2 className="text-xl font-bold text-[#1a1714] mb-2">Storage limit reached</h2>
+            <p className="text-[#6b7280] text-sm mb-6">
+              You&apos;ve used <strong className="text-[#1a1714]">{quotaData.current}/{quotaData.limit}</strong> contract slots on the Free plan.
+              Upgrade to store more contracts.
+            </p>
+            <div className="flex flex-col gap-3">
+              <Button
+                className="w-full bg-[#c8873a] hover:bg-[#b5762f] text-white"
+                onClick={() => router.push('/settings/billing')}
+              >
+                Upgrade Plan →
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setQuotaData(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : duplicateData ? (
            <div className="py-4 text-left">
              {duplicateData.type === 'EXACT_MATCH' && (
                <>
