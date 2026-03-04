@@ -254,7 +254,7 @@ export default function ContractDetailPage() {
               </Link>
 
               {contract.file_url && (
-                <a href={contract.file_url} target="_blank" rel="noopener noreferrer">
+                <a href={`/api/contracts/${contractId}/download`} target="_blank" rel="noopener noreferrer">
                   <button className="p-2.5 border border-[#E5E7EB] rounded-lg hover:bg-[#F3F4F6] transition-colors" title="Download PDF">
                     <Download className="w-4 h-4 text-[#6B7280]" />
                   </button>
@@ -640,7 +640,7 @@ export default function ContractDetailPage() {
                 </Link>
 
                 {contract.file_url && (
-                  <a href={contract.file_url} target="_blank" rel="noopener noreferrer" className="block">
+                  <a href={`/api/contracts/${contractId}/download`} target="_blank" rel="noopener noreferrer" className="block">
                     <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-[#F3F4F6] transition-colors text-left">
                       <Download className="w-4 h-4 text-[#6B7280]" />
                       <span className="text-sm text-[#374151]">Download PDF</span>

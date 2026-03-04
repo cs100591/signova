@@ -15,6 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Signova - AI Contract Companion",
   description: "Understand contracts clearly before signing",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

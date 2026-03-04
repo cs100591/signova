@@ -40,3 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 gcp-key.json
+
+# Test & debug files
+test_*.js
+vercel_logs.txt

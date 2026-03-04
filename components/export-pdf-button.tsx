@@ -59,7 +59,7 @@ export default function ExportPDFButton({
       ) : (
         <>
           <Download className="w-4 h-4" />
-          <span>Export PDF</span>
+          <span>Export PDF Report</span>
         </>
       )}
     </button>
