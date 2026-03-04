@@ -31,24 +31,17 @@ export async function POST(req: Request) {
     const customerId = sub?.stripe_customer_id ?? null;
 
     try {
-      const sessionParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
+      const session = await stripe.checkout.sessions.create({
+        ...(customerId
+          ? { customer: customerId }
+          : { customer_email: user.email ?? undefined }),
         mode: 'subscription',
         payment_method_types: ['card'],
         line_items: [{ price: priceId, quantity: 1 }],
         success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing&success=1`,
         cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=billing`,
         metadata: { userId: user.id, plan },
-      };
-
-      if (customerId) {
-        // Returning customer — attach to existing Stripe customer record
-        sessionParams.customer = customerId;
-      } else {
-        // New customer — let Stripe create one during checkout, pre-fill email
-        sessionParams.customer_email = user.email ?? undefined;
-      }
-
-      const session = await stripe.checkout.sessions.create(sessionParams);
+      });
       return NextResponse.json({ sessionId: session.id, url: session.url });
     } catch (stripeErr: any) {
       console.error('[Checkout] Stripe error:', stripeErr);
