@@ -54,6 +54,7 @@ const QUICK_QUESTIONS = [
 function TerminalPageInner() {
   const searchParams = useSearchParams();
   const contractIdParam = searchParams.get("contractId");
+  const reanalyzeParam = searchParams.get("reanalyze");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
@@ -182,7 +183,7 @@ function TerminalPageInner() {
         if (!res.ok) return;
         const contract = await res.json();
 
-        // Build analysis text from available contract data
+        // Build context text from available contract data
         const parts: string[] = [];
         if (contract.name) parts.push(`Contract: ${contract.name}`);
         if (contract.type) parts.push(`Type: ${contract.type}`);
@@ -200,30 +201,71 @@ function TerminalPageInner() {
         setContractText(text);
         setContractName(name);
         setShowContractInput(false);
-        setIsAnalyzing(true);
 
-        setMessages([{
-          id: Date.now().toString(),
-          role: "user",
-          content: `Analyze this contract: ${name}`,
-          timestamp: new Date(),
-        }]);
+        const hasExistingAnalysis = !!contract.analysis_result;
+        const shouldReanalyze = reanalyzeParam === "1";
 
-        // Read selectedParty from localStorage (prefer terminalSelectedParty, fall back to uploadedContract)
-        let storedParty: string | null = null;
-        try {
-          storedParty = localStorage.getItem("terminalSelectedParty");
-          if (storedParty) {
-            localStorage.removeItem("terminalSelectedParty");
-          } else {
-            const stored = localStorage.getItem("uploadedContract");
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              if (parsed.selectedParty) storedParty = parsed.selectedParty;
+        if (hasExistingAnalysis && !shouldReanalyze) {
+          // ── Chat mode: load existing analysis + greet ──
+          const raw = contract.analysis_result;
+          const existing: AnalysisResult = {
+            riskScore: raw.riskScore ?? 0,
+            riskVerdict: raw.verdict || raw.riskVerdict || "",
+            findings: raw.findings || [],
+            missing: raw.missing || [],
+            summary: raw.summary || [],
+          };
+          setAnalysisResult(existing);
+          setAnalysisComplete(true);
+
+          const partyHint = (contract.party_a && contract.party_b)
+            ? ` — **${contract.party_a}** or **${contract.party_b}**?`
+            : "?";
+          const greeting = `I've loaded **${name}** and the analysis above. Which party are you in this agreement${partyHint} Tell me and I'll tailor my advice. Or just ask me anything about this contract.`;
+
+          setMessages([
+            {
+              id: Date.now().toString(),
+              role: "assistant",
+              content: "analysis complete",
+              type: "analysis",
+              analysisResult: existing,
+              timestamp: new Date(),
+            },
+            {
+              id: (Date.now() + 1).toString(),
+              role: "assistant",
+              content: greeting,
+              type: "text",
+              timestamp: new Date(),
+            },
+          ]);
+        } else {
+          // ── Analyze mode: run fresh analysis ──
+          setIsAnalyzing(true);
+          setMessages([{
+            id: Date.now().toString(),
+            role: "user",
+            content: `Analyze this contract: ${name}`,
+            timestamp: new Date(),
+          }]);
+
+          // Read selectedParty from localStorage (prefer terminalSelectedParty, fall back to uploadedContract)
+          let storedParty: string | null = null;
+          try {
+            storedParty = localStorage.getItem("terminalSelectedParty");
+            if (storedParty) {
+              localStorage.removeItem("terminalSelectedParty");
+            } else {
+              const stored = localStorage.getItem("uploadedContract");
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.selectedParty) storedParty = parsed.selectedParty;
+              }
             }
-          }
-        } catch {}
-        await startContractAnalysis(text, contractIdParam, storedParty);
+          } catch {}
+          await startContractAnalysis(text, contractIdParam, storedParty);
+        }
       } catch (err) {
         console.error("[Terminal] Failed to auto-load contract:", err);
         setIsAnalyzing(false);
@@ -671,7 +713,7 @@ function TerminalPageInner() {
                         <div className="w-full max-w-2xl">
                           <AnalysisResultCards result={message.analysisResult} />
                         </div>
-                      ) : (
+                      ) : message.content === "" ? null : (
                         // Regular text message
                         <div
                           className={`${
@@ -700,8 +742,8 @@ function TerminalPageInner() {
                     </div>
                   )}
 
-                  {/* Normal chat typing indicator */}
-                  {isTyping && (
+                  {/* Normal chat typing indicator — hide once streaming has started */}
+                  {isTyping && !messages.some(m => m.role === "assistant" && m.content === "" && m.type !== "analysis") && (
                     <div className="mt-4">
                       <ChatTypingIndicator />
                     </div>

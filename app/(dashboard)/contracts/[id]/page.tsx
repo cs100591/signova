@@ -207,11 +207,11 @@ export default function ContractDetailPage() {
           onSelect={(selectedParty: string) => {
             setPartyModal(null);
             try { localStorage.setItem("terminalSelectedParty", selectedParty); } catch {}
-            router.push(`/terminal?contractId=${contractId}`);
+            router.push(`/terminal?contractId=${contractId}&reanalyze=1`);
           }}
           onClose={() => {
             setPartyModal(null);
-            router.push(`/terminal?contractId=${contractId}`);
+            router.push(`/terminal?contractId=${contractId}&reanalyze=1`);
           }}
         />
       )}

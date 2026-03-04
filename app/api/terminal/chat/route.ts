@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       commonConcerns: []
     };
 
-    // Fetch conversation history for current contract (if any)
+    // Fetch conversation history
     let conversationHistory: any[] = [];
     if (contractId) {
       const { data: history } = await supabase
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Save user question to conversation history
+    // Save user question
     if (contractId) {
       await supabase.from('conversation_history').insert({
         user_id: user.id,
@@ -77,26 +77,55 @@ export async function POST(request: Request) {
       { role: 'user' as const, content: userPrompt }
     ];
 
+    // Stream text and pipe manually as plain text chunks
     const result = streamText({
       model: anthropic('claude-sonnet-4-6'),
       system: systemPrompt,
       messages,
       maxTokens: 1000,
       temperature: 0.7,
-      onFinish: async ({ text }: { text: string }) => {
-        // Save assistant response to history after stream completes
-        if (contractId) {
-          await supabase.from('conversation_history').insert({
-            user_id: user.id,
-            contract_id: contractId,
-            role: 'assistant',
-            content: text
-          });
-        }
-      },
     } as any);
 
-    return result.toTextStreamResponse();
+    const { textStream } = result;
+    const encoder = new TextEncoder();
+    let fullText = '';
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of textStream) {
+            fullText += chunk;
+            controller.enqueue(encoder.encode(chunk));
+          }
+        } catch (err) {
+          console.error('[Chat] Stream error:', err);
+          controller.error(err);
+        } finally {
+          controller.close();
+          // Save assistant response after stream ends
+          if (contractId && fullText) {
+            try {
+              await supabase.from('conversation_history').insert({
+                user_id: user.id,
+                contract_id: contractId,
+                role: 'assistant',
+                content: fullText
+              });
+            } catch (saveErr) {
+              console.error('[Chat] Failed to save history:', saveErr);
+            }
+          }
+        }
+      }
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+      }
+    });
   } catch (error: any) {
     console.error('Terminal chat error:', error);
     return new Response(JSON.stringify({ error: 'Failed to process request', details: error.message }), { status: 500 });
