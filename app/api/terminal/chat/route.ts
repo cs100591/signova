@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
 import { anthropic } from '@ai-sdk/anthropic';
-import { generateText } from 'ai';
+import { streamText } from 'ai';
 import { buildSystemPrompt } from '@/lib/buildSystemPrompt';
 import { createSupabaseServerClient } from '@/lib/supabase';
+
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   try {
@@ -10,25 +11,22 @@ export async function POST(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
     }
 
     const { question, contractText, contractId } = await request.json();
 
     if (!question) {
-      return NextResponse.json(
-        { error: 'Question is required' },
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: 'Question is required' }), { status: 400 });
     }
 
-    // 0. Fetch user profile
+    // Fetch user profile
     const { data: profile } = await supabase
       .from('profiles')
       .select('country, preferred_language, contract_types')
       .eq('id', user.id)
       .single();
-      
+
     const userProfileContext = {
       region: profile?.country,
       jurisdiction: profile?.country,
@@ -38,7 +36,7 @@ export async function POST(request: Request) {
       commonConcerns: []
     };
 
-    // 1. Fetch conversation_history for current contract (if any)
+    // Fetch conversation history for current contract (if any)
     let conversationHistory: any[] = [];
     if (contractId) {
       const { data: history } = await supabase
@@ -48,7 +46,7 @@ export async function POST(request: Request) {
         .eq('contract_id', contractId)
         .order('created_at', { ascending: true })
         .limit(10);
-      
+
       if (history) {
         conversationHistory = history.map(h => ({
           role: h.role,
@@ -57,10 +55,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. We'll skip pgvector search for past contracts for now since we'd need to generate embeddings on upload first.
-    // We'll implement that in a separate step or module if needed.
-
-    // 3. Save user's question to conversation_history
+    // Save user question to conversation history
     if (contractId) {
       await supabase.from('conversation_history').insert({
         user_id: user.id,
@@ -70,10 +65,8 @@ export async function POST(request: Request) {
       });
     }
 
-    // Build system prompt
     const systemPrompt = buildSystemPrompt(userProfileContext);
 
-    // Build user prompt
     let userPrompt = question;
     if (contractText) {
       userPrompt = `Contract Context:\n${contractText.substring(0, 3000)}\n\nUser Question: ${question}`;
@@ -81,34 +74,31 @@ export async function POST(request: Request) {
 
     const messages = [
       ...conversationHistory,
-      { role: 'user', content: userPrompt }
+      { role: 'user' as const, content: userPrompt }
     ];
 
-    // Check if we want to stream or not. For now we will return a generated text response.
-    const result = await generateText({
+    const result = streamText({
       model: anthropic('claude-sonnet-4-6'),
       system: systemPrompt,
-      messages: messages,
+      messages,
       maxTokens: 1000,
       temperature: 0.7,
+      onFinish: async ({ text }: { text: string }) => {
+        // Save assistant response to history after stream completes
+        if (contractId) {
+          await supabase.from('conversation_history').insert({
+            user_id: user.id,
+            contract_id: contractId,
+            role: 'assistant',
+            content: text
+          });
+        }
+      },
     } as any);
 
-    // Save assistant's response to conversation_history
-    if (contractId) {
-      await supabase.from('conversation_history').insert({
-        user_id: user.id,
-        contract_id: contractId,
-        role: 'assistant',
-        content: result.text
-      });
-    }
-
-    return NextResponse.json({ response: result.text });
+    return result.toTextStreamResponse();
   } catch (error: any) {
     console.error('Terminal chat error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process request', details: error.message },
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: 'Failed to process request', details: error.message }), { status: 500 });
   }
 }

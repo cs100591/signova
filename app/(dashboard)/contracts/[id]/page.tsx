@@ -23,6 +23,7 @@ import {
 import ExportPDFButton from "@/components/export-pdf-button";
 import { ContractAnalysis } from "@/lib/pdf-export";
 import { RiskLow, RiskMedium, RiskHigh, AnalysisComplete } from "@/components/illustrations";
+import PartySelectionModal from "@/components/PartySelectionModal";
 
 interface Contract {
   id: string;
@@ -106,6 +107,7 @@ export default function ContractDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [deleting, setDeleting] = useState(false);
+  const [partyModal, setPartyModal] = useState<{ partyA: any; partyB: any; contractType: string | null } | null>(null);
 
   useEffect(() => {
     if (!contractId) return;
@@ -150,6 +152,15 @@ export default function ContractDetailPage() {
     }
   };
 
+  const handleStartAnalysis = () => {
+    if (!contract) return;
+    setPartyModal({
+      partyA: contract.party_a ? { name: contract.party_a, role: "" } : null,
+      partyB: contract.party_b ? { name: contract.party_b, role: "" } : null,
+      contractType: contract.type || null,
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8F7F4] flex items-center justify-center">
@@ -188,6 +199,22 @@ export default function ContractDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
+      {partyModal && (
+        <PartySelectionModal
+          partyA={partyModal.partyA}
+          partyB={partyModal.partyB}
+          contractType={partyModal.contractType}
+          onSelect={(selectedParty: string) => {
+            setPartyModal(null);
+            try { localStorage.setItem("terminalSelectedParty", selectedParty); } catch {}
+            router.push(`/terminal?contractId=${contractId}`);
+          }}
+          onClose={() => {
+            setPartyModal(null);
+            router.push(`/terminal?contractId=${contractId}`);
+          }}
+        />
+      )}
       {/* Header */}
       <div className="bg-white border-b border-[#E5E7EB] px-8 py-5">
         <div className="max-w-[1400px] mx-auto">
@@ -383,11 +410,12 @@ export default function ContractDetailPage() {
                       <p className="text-[#6B7280] mb-6">
                         Run AI analysis to identify risks and get improvement suggestions
                       </p>
-                      <Link href={`/terminal?contractId=${contractId}`}>
-                        <button className="px-6 py-3 bg-[#F59E0B] text-white rounded-xl font-medium hover:bg-[#D97706]">
-                          Start AI Analysis
-                        </button>
-                      </Link>
+                      <button
+                        onClick={handleStartAnalysis}
+                        className="px-6 py-3 bg-[#F59E0B] text-white rounded-xl font-medium hover:bg-[#D97706]"
+                      >
+                        Start AI Analysis
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -398,11 +426,19 @@ export default function ContractDetailPage() {
                         <h3 className="font-semibold text-[#1A1A1A]">
                           AI Analysis Results
                         </h3>
-                        <ExportPDFButton
-                          analysis={analysis}
-                          variant="secondary"
-                          size="sm"
-                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleStartAnalysis}
+                            className="px-3 py-1.5 text-xs bg-[#F3F4F6] text-[#374151] rounded-lg hover:bg-[#E5E7EB] transition-colors font-medium"
+                          >
+                            Analyze Again
+                          </button>
+                          <ExportPDFButton
+                            analysis={analysis}
+                            variant="secondary"
+                            size="sm"
+                          />
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-4 p-4 bg-[#F9FAFB] rounded-lg">
@@ -588,11 +624,6 @@ export default function ContractDetailPage() {
                   <p className="text-sm text-[#6B7280] mt-1">Based on AI analysis</p>
                 </div>
 
-                <Link href={`/terminal?contractId=${contractId}`}>
-                  <button className="w-full mt-4 px-4 py-2.5 bg-[#F59E0B] text-white rounded-lg text-sm font-medium hover:bg-[#D97706] transition-colors">
-                    Ask AI About This
-                  </button>
-                </Link>
               </div>
             )}
 

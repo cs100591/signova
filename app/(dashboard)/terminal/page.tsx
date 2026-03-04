@@ -11,6 +11,7 @@ import {
   RiskRobot
 } from "@/components/illustrations/RobotIllustrations";
 import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
+import PartySelectionModal from "@/components/PartySelectionModal";
 import { RiskScoreCard } from "@/components/terminal/RiskScoreCard";
 import { FindingCards } from "@/components/terminal/FindingCards";
 import { MarkdownMessage } from "@/components/terminal/MarkdownMessage";
@@ -65,6 +66,7 @@ function TerminalPageInner() {
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [linkedContractId, setLinkedContractId] = useState<string | null>(null);
+  const [partyModal, setPartyModal] = useState<{ text: string; contractId: string | null; partyA: any; partyB: any; contractType: string | null } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -207,13 +209,18 @@ function TerminalPageInner() {
           timestamp: new Date(),
         }]);
 
-        // Read selectedParty from localStorage if available
+        // Read selectedParty from localStorage (prefer terminalSelectedParty, fall back to uploadedContract)
         let storedParty: string | null = null;
         try {
-          const stored = localStorage.getItem("uploadedContract");
-          if (stored) {
-            const parsed = JSON.parse(stored);
-            if (parsed.selectedParty) storedParty = parsed.selectedParty;
+          storedParty = localStorage.getItem("terminalSelectedParty");
+          if (storedParty) {
+            localStorage.removeItem("terminalSelectedParty");
+          } else {
+            const stored = localStorage.getItem("uploadedContract");
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (parsed.selectedParty) storedParty = parsed.selectedParty;
+            }
           }
         } catch {}
         await startContractAnalysis(text, contractIdParam, storedParty);
@@ -227,8 +234,18 @@ function TerminalPageInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Regular chat (with contract context) ───────────────────────────────
+  // ── Regular chat (streaming) ────────────────────────────────────────────
   const handleRegularChat = async (text: string) => {
+    const msgId = (Date.now() + 1).toString();
+    // Add empty assistant message to stream into
+    setMessages(prev => [...prev, {
+      id: msgId,
+      role: "assistant",
+      content: "",
+      type: "text",
+      timestamp: new Date(),
+    }]);
+
     try {
       const response = await fetch("/api/terminal/chat", {
         method: "POST",
@@ -240,23 +257,27 @@ function TerminalPageInner() {
       });
 
       if (!response.ok) throw new Error("Chat failed");
+      if (!response.body) throw new Error("No response body");
 
-      const data = await response.json();
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.response,
-        type: "text",
-        timestamp: new Date(),
-      }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        accumulated += chunk;
+        setMessages(prev => prev.map(m =>
+          m.id === msgId ? { ...m, content: accumulated } : m
+        ));
+      }
     } catch (error: any) {
       console.error("[Terminal] Chat error:", error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "Sorry, I encountered an error. Please try again.",
-        timestamp: new Date(),
-      }]);
+      setMessages(prev => prev.map(m =>
+        m.id === msgId ? { ...m, content: "Sorry, I encountered an error. Please try again." } : m
+      ));
     } finally {
       setIsTyping(false);
     }
@@ -340,8 +361,20 @@ function TerminalPageInner() {
 
       setContractText(extractedText);
 
-      // Pass text directly — avoids React async state staleness
-      await startContractAnalysis(extractedText);
+      // Show party modal before analysis
+      try {
+        const partiesRes = await fetch("/api/extract-parties", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contractText: extractedText }),
+        });
+        const parties = partiesRes.ok ? await partiesRes.json() : { party_a: null, party_b: null, contract_type: null };
+        setIsAnalyzing(false);
+        setPartyModal({ text: extractedText, contractId: null, partyA: parties.party_a, partyB: parties.party_b, contractType: parties.contract_type });
+      } catch {
+        // If party extraction fails, proceed without modal
+        await startContractAnalysis(extractedText);
+      }
     } catch (err: any) {
       console.error("[Terminal] PDF upload error:", err);
       setIsAnalyzing(false);
@@ -445,6 +478,40 @@ function TerminalPageInner() {
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
+    <>
+    {partyModal && (
+      <PartySelectionModal
+        partyA={partyModal.partyA}
+        partyB={partyModal.partyB}
+        contractType={partyModal.contractType}
+        onSelect={(selectedParty: string) => {
+          const { text, contractId: cid } = partyModal;
+          setPartyModal(null);
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "user",
+            content: `Analyze this contract`,
+            timestamp: new Date(),
+          }]);
+          setShowContractInput(false);
+          setIsAnalyzing(true);
+          startContractAnalysis(text, cid, selectedParty);
+        }}
+        onClose={() => {
+          const { text, contractId: cid } = partyModal;
+          setPartyModal(null);
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: "user",
+            content: `Analyze this contract`,
+            timestamp: new Date(),
+          }]);
+          setShowContractInput(false);
+          setIsAnalyzing(true);
+          startContractAnalysis(text, cid);
+        }}
+      />
+    )}
     <div className="flex h-full bg-[#F8F7F4]">
       <div className="flex-1 flex flex-col min-h-0">
 
@@ -541,7 +608,19 @@ function TerminalPageInner() {
 
                   {contractText.trim() && inputMode === "paste" && (
                     <button
-                      onClick={() => handleSendMessage("Please analyze this contract")}
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/extract-parties", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ contractText }),
+                          });
+                          const parties = res.ok ? await res.json() : { party_a: null, party_b: null, contract_type: null };
+                          setPartyModal({ text: contractText, contractId: null, partyA: parties.party_a, partyB: parties.party_b, contractType: parties.contract_type });
+                        } catch {
+                          handleSendMessage("Please analyze this contract");
+                        }
+                      }}
                       disabled={isAnalyzing || isTyping}
                       className="flex items-center gap-2 px-6 py-2.5 bg-[#F59E0B] text-white rounded-lg font-medium hover:bg-[#D97706] disabled:opacity-50 transition-colors"
                     >
@@ -700,6 +779,7 @@ function TerminalPageInner() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

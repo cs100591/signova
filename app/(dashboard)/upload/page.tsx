@@ -6,7 +6,6 @@ import { UploadCloud, Plus, Loader2, FileText, Scan, Image, AlertCircle, Refresh
 import { UploadIdle, UploadScanning } from "@/components/illustrations";
 import { Button } from "@/components/ui/button";
 import { UploadConfetti } from "@/components/animations/UploadConfetti";
-import PartySelectionModal from "@/components/PartySelectionModal";
 
 export default function UploadPage() {
   const [isUploading, setIsUploading] = useState(false);
@@ -16,7 +15,6 @@ export default function UploadPage() {
   const [duplicateData, setDuplicateData] = useState<any>(null);
   const [contractData, setContractData] = useState<any>(null);
   const [quotaData, setQuotaData] = useState<{ current: number; limit: number } | null>(null);
-  const [partyModal, setPartyModal] = useState<{ data: any; partyA: any; partyB: any; contractType: string | null; versionArgs?: any } | null>(null);
   const router = useRouter();
 
   // Detect file type and return appropriate status messages
@@ -50,21 +48,6 @@ export default function UploadPage() {
     }
     localStorage.setItem("uploadedContract", JSON.stringify(data));
     router.push("/extracting");
-  };
-
-  const extractPartiesAndShowModal = async (data: any, versionArgs?: any) => {
-    try {
-      const res = await fetch("/api/extract-parties", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractText: data.extractedText || "" }),
-      });
-      const parties = res.ok ? await res.json() : { party_a: null, party_b: null, contract_type: null };
-      setPartyModal({ data, partyA: parties.party_a, partyB: parties.party_b, contractType: parties.contract_type, versionArgs });
-    } catch {
-      // If party extraction fails, proceed without modal
-      proceedToNextStep(data, versionArgs);
-    }
   };
 
   const handleUpload = async (file: File) => {
@@ -134,7 +117,7 @@ export default function UploadPage() {
         setDuplicateData(data.duplicateResult);
       } else {
         setTimeout(() => {
-          extractPartiesAndShowModal(data);
+          proceedToNextStep(data);
         }, 2000);
       }
     } catch (error: any) {
@@ -182,21 +165,6 @@ export default function UploadPage() {
     >
       <UploadConfetti fire={uploadProgress >= 100 && !duplicateData} />
 
-      {partyModal && (
-        <PartySelectionModal
-          partyA={partyModal.partyA}
-          partyB={partyModal.partyB}
-          contractType={partyModal.contractType}
-          onSelect={(selectedParty: string) => {
-            setPartyModal(null);
-            proceedToNextStep(partyModal.data, partyModal.versionArgs, selectedParty);
-          }}
-          onClose={() => {
-            setPartyModal(null);
-            proceedToNextStep(partyModal.data, partyModal.versionArgs);
-          }}
-        />
-      )}
       <div 
         className={`bg-white rounded-[20px] border-2 p-12 w-full max-w-[560px] text-center transition-all ${
           dragActive 
@@ -248,7 +216,7 @@ export default function UploadPage() {
                    <Button variant="outline" className="w-full" onClick={() => router.push(`/contracts/${duplicateData.existingContractId}`)}>
                      View Existing
                    </Button>
-                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => extractPartiesAndShowModal(contractData, { file_hash: duplicateData.fileHash, contract_group_id: duplicateData.contractGroupId })}>
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { file_hash: duplicateData.fileHash, contract_group_id: duplicateData.contractGroupId })}>
                      Upload Anyway
                    </Button>
                  </div>
@@ -262,10 +230,10 @@ export default function UploadPage() {
                  </div>
                  <p className="text-gray-600 mb-6">{duplicateData.message}</p>
                  <div className="flex flex-col gap-3">
-                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => extractPartiesAndShowModal(contractData, { parent_contract_id: duplicateData.existingContractId, contract_group_id: duplicateData.contractGroupId, version: 2, file_hash: duplicateData.fileHash })}>
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { parent_contract_id: duplicateData.existingContractId, contract_group_id: duplicateData.contractGroupId, version: 2, file_hash: duplicateData.fileHash })}>
                      Save as New Version
                    </Button>
-                   <Button variant="outline" className="w-full" onClick={() => extractPartiesAndShowModal(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
+                   <Button variant="outline" className="w-full" onClick={() => proceedToNextStep(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
                      Upload Anyway
                    </Button>
                  </div>
@@ -282,7 +250,7 @@ export default function UploadPage() {
                    <Button variant="outline" className="w-full" onClick={() => router.push('/contracts')}>
                      View All
                    </Button>
-                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => extractPartiesAndShowModal(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
+                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { contract_group_id: duplicateData.contractGroupId, file_hash: duplicateData.fileHash })}>
                      Continue Upload
                    </Button>
                  </div>
