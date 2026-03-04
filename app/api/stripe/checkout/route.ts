@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import { stripe, STRIPE_PRICE_IDS } from '@/lib/stripe';
 
+export const maxDuration = 30;
+
 export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServerClient();

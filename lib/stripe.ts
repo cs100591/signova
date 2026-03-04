@@ -9,6 +9,8 @@ if (!process.env.STRIPE_SECRET_KEY) {
 
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2026-02-25.clover',
+  maxNetworkRetries: 0,
+  timeout: 20000, // 20s — well under Vercel's 30s function limit
 });
 
 export const STRIPE_PRICE_IDS: Record<string, string> = {
