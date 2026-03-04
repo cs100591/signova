@@ -19,6 +19,7 @@ const TERMINAL_STEPS = [
   'Extracting text...',
   'Identifying clauses...',
   'Analyzing risk factors...',
+  'Analysis complete',
 ];
 
 export function AnalysisTerminal({ 

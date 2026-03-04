@@ -16,6 +16,9 @@ interface Finding {
 interface FindingCardsProps {
   findings: Finding[];
   isVisible: boolean;
+  acknowledgedFindings?: string[];
+  onAcknowledgeToggle?: (title: string) => void;
+  onTellMeMore?: (finding: Finding) => void;
 }
 
 const severityConfig = {
@@ -24,7 +27,15 @@ const severityConfig = {
   LOW: { bg: '#f3f4f6', text: '#6b7280', border: '#d1d5db' },
 };
 
-function FindingCard({ finding, index }: { finding: Finding; index: number }) {
+interface FindingCardProps {
+  finding: Finding;
+  index: number;
+  isAcknowledged: boolean;
+  onAcknowledgeToggle: () => void;
+  onTellMeMore: () => void;
+}
+
+function FindingCard({ finding, index, isAcknowledged, onAcknowledgeToggle, onTellMeMore }: FindingCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [explanation, setExplanation] = useState<string | null>(null);
@@ -65,12 +76,12 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 24, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ 
-        duration: 0.4, 
+      transition={{
+        duration: 0.4,
         delay: 0.54 + index * 0.12,
         ease: [0.25, 0.1, 0.25, 1]
       }}
-      className="bg-white border border-[#e0d9ce] rounded-xl overflow-hidden mb-3"
+      className={`bg-white border border-[#e0d9ce] rounded-xl overflow-hidden mb-3 transition-opacity duration-300 ${isAcknowledged ? 'opacity-50' : 'opacity-100'}`}
     >
       {/* Header */}
       <button
@@ -79,8 +90,8 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
       >
         <div
           className="px-2 py-1 rounded text-xs font-semibold uppercase"
-          style={{ 
-            backgroundColor: severity.bg, 
+          style={{
+            backgroundColor: severity.bg,
             color: severity.text,
             border: `1px solid ${severity.border}`
           }}
@@ -91,7 +102,7 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
           <div className="text-xs text-[#9a8f82] uppercase tracking-wide mb-1">
             {finding.category}
           </div>
-          <div className="font-medium text-[#1a1714] text-sm">
+          <div className={`font-medium text-sm ${isAcknowledged ? 'text-[#9a8f82] line-through' : 'text-[#1a1714]'}`}>
             {finding.title}
           </div>
         </div>
@@ -106,7 +117,7 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
       {/* Expanded Content */}
       <motion.div
         initial={false}
-        animate={{ 
+        animate={{
           height: isExpanded ? 'auto' : 0,
           opacity: isExpanded ? 1 : 0
         }}
@@ -169,18 +180,28 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#f0ede8]">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#16a34a] bg-[#f0fdf4] hover:bg-[#dcfce7] transition-colors border border-[#bbf7d0]">
-              <ThumbsUp className="w-3.5 h-3.5" />
-              Looks Good
+            <button
+              onClick={(e) => { e.stopPropagation(); onAcknowledgeToggle(); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                isAcknowledged
+                  ? 'text-[#16a34a] bg-[#f0fdf4] border-[#bbf7d0]'
+                  : 'text-[#6b7280] bg-white border-[#e5e7eb] hover:bg-[#f0fdf4] hover:text-[#16a34a] hover:border-[#bbf7d0]'
+              }`}
+            >
+              {isAcknowledged ? <Check className="w-3.5 h-3.5" /> : <ThumbsUp className="w-3.5 h-3.5" />}
+              {isAcknowledged ? 'Acknowledged' : 'Looks Good'}
             </button>
-            <button 
+            <button
               onClick={handleExplain}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#c8873a] bg-[#fffbeb] hover:bg-[#fef3c7] transition-colors border border-[#fde68a]"
             >
               {isExplaining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
               Explain Simply
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#6b7280] hover:bg-[#f3f4f6] transition-colors border border-[#e5e7eb]">
+            <button
+              onClick={(e) => { e.stopPropagation(); onTellMeMore(); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#6b7280] hover:bg-[#f3f4f6] transition-colors border border-[#e5e7eb]"
+            >
               <HelpCircle className="w-3.5 h-3.5" />
               Tell Me More
             </button>
@@ -210,7 +231,7 @@ function FindingCard({ finding, index }: { finding: Finding; index: number }) {
   );
 }
 
-export function FindingCards({ findings, isVisible }: FindingCardsProps) {
+export function FindingCards({ findings, isVisible, acknowledgedFindings = [], onAcknowledgeToggle, onTellMeMore }: FindingCardsProps) {
   if (!isVisible || findings.length === 0) return null;
 
   return (
@@ -219,10 +240,13 @@ export function FindingCards({ findings, isVisible }: FindingCardsProps) {
         Key Findings ({findings.length})
       </h3>
       {findings.map((finding, index) => (
-        <FindingCard 
-          key={index} 
-          finding={finding} 
+        <FindingCard
+          key={index}
+          finding={finding}
           index={index}
+          isAcknowledged={acknowledgedFindings.includes(finding.title)}
+          onAcknowledgeToggle={() => onAcknowledgeToggle?.(finding.title)}
+          onTellMeMore={() => onTellMeMore?.(finding)}
         />
       ))}
     </div>

@@ -2,13 +2,11 @@
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Send, FileText, Plus, History, Upload, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { Send, FileText, Plus, Upload, X } from "lucide-react";
+import { motion } from "framer-motion";
 import {
   WaitingRobot,
   ThinkingRobot,
-  ClearRobot,
-  RiskRobot
 } from "@/components/illustrations/RobotIllustrations";
 import { AnalysisTerminal } from "@/components/terminal/AnalysisTerminal";
 import PartySelectionModal from "@/components/PartySelectionModal";
@@ -35,12 +33,20 @@ interface AnalysisResult {
   summary: string[];
 }
 
+interface Choice {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  type?: "text" | "analysis";
+  type?: "text" | "analysis" | "choices";
   analysisResult?: AnalysisResult;
+  choices?: Choice[];
+  choicesUsed?: boolean;
   timestamp: Date;
 }
 
@@ -50,6 +56,100 @@ const QUICK_QUESTIONS = [
   "How can I negotiate this?",
   "What's missing from this contract?",
 ];
+
+// Extracted outside TerminalPageInner to prevent remount on every render
+function AnalysisResultCards({
+  result,
+  acknowledgedFindings,
+  onAcknowledgeToggle,
+  onTellMeMore,
+}: {
+  result: AnalysisResult;
+  acknowledgedFindings: string[];
+  onAcknowledgeToggle: (title: string) => void;
+  onTellMeMore: (finding: Finding) => void;
+}) {
+  return (
+    <div className="w-full space-y-4">
+      {/* Risk Score */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <RiskScoreCard
+          score={result.riskScore}
+          verdict={result.riskVerdict}
+          isVisible={true}
+        />
+      </motion.div>
+
+      {/* Finding Cards */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+      >
+        <FindingCards
+          findings={result.findings}
+          isVisible={true}
+          acknowledgedFindings={acknowledgedFindings}
+          onAcknowledgeToggle={onAcknowledgeToggle}
+          onTellMeMore={onTellMeMore}
+        />
+      </motion.div>
+
+      {/* Key Takeaways */}
+      {result.summary.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white border border-[#e0d9ce] rounded-xl p-5"
+        >
+          <h3 className="text-sm font-semibold text-[#1a1714] mb-3">Key Takeaways</h3>
+          <ul className="space-y-2">
+            {result.summary.map((point, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#3a3530]">
+                <span className="text-[#c8873a] mt-0.5">•</span>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
+      {/* Missing Protections */}
+      {result.missing.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-[#FFF8F0] border border-[#F59E0B]/30 rounded-xl p-5"
+        >
+          <h3 className="text-sm font-semibold text-[#92400e] mb-3">Missing Protections</h3>
+          <ul className="space-y-1.5">
+            {result.missing.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-[#78350f]">
+                <span className="mt-0.5">⚠️</span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
+      {/* Disclaimer */}
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="text-center text-xs text-[#9a8f82] pt-2"
+      >
+        ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
+      </motion.p>
+    </div>
+  );
+}
 
 function TerminalPageInner() {
   const searchParams = useSearchParams();
@@ -68,6 +168,8 @@ function TerminalPageInner() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [linkedContractId, setLinkedContractId] = useState<string | null>(null);
   const [partyModal, setPartyModal] = useState<{ text: string; contractId: string | null; partyA: any; partyB: any; contractType: string | null } | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
+  const [acknowledgedFindings, setAcknowledgedFindings] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -152,6 +254,18 @@ function TerminalPageInner() {
         } catch (saveErr) {
           console.error("[Terminal] Failed to save analysis to contract:", saveErr);
         }
+
+        // Fetch analysis ID for Looks Good persistence
+        try {
+          const aRes = await fetch(`/api/contract-analyses?contractId=${contractIdToSave}`);
+          if (aRes.ok) {
+            const aData = await aRes.json();
+            if (aData) {
+              setAnalysisId(aData.id);
+              setAcknowledgedFindings(aData.acknowledged_findings || []);
+            }
+          }
+        } catch {}
       }
     } catch (error: any) {
       console.error("[Terminal] Analysis error:", error);
@@ -218,10 +332,28 @@ function TerminalPageInner() {
           setAnalysisResult(existing);
           setAnalysisComplete(true);
 
-          const partyHint = (contract.party_a && contract.party_b)
-            ? ` — **${contract.party_a}** or **${contract.party_b}**?`
-            : "?";
-          const greeting = `I've loaded **${name}** and the analysis above. Which party are you in this agreement${partyHint} Tell me and I'll tailor my advice. Or just ask me anything about this contract.`;
+          const choices: Choice[] = [
+            {
+              id: "party_a",
+              label: contract.party_a || "Party A",
+              description: "Analyze from their perspective",
+            },
+            {
+              id: "party_b",
+              label: contract.party_b || "Party B",
+              description: "Analyze from their perspective",
+            },
+            {
+              id: "reviewing",
+              label: "Reviewing for someone else",
+              description: "Neutral analysis of both sides",
+            },
+            {
+              id: "unsure",
+              label: "Not sure",
+              description: "Analyze from the less powerful party's perspective",
+            },
+          ];
 
           setMessages([
             {
@@ -235,11 +367,24 @@ function TerminalPageInner() {
             {
               id: (Date.now() + 1).toString(),
               role: "assistant",
-              content: greeting,
-              type: "text",
+              content: `I've loaded **${name}** and the analysis above. Which party are you in this agreement? Pick one and I'll tailor my advice, or just ask me anything directly.`,
+              type: "choices",
+              choices,
               timestamp: new Date(),
             },
           ]);
+
+          // Fetch analysis record for Looks Good persistence
+          try {
+            const aRes = await fetch(`/api/contract-analyses?contractId=${contractIdParam}`);
+            if (aRes.ok) {
+              const aData = await aRes.json();
+              if (aData) {
+                setAnalysisId(aData.id);
+                setAcknowledgedFindings(aData.acknowledged_findings || []);
+              }
+            }
+          } catch {}
         } else {
           // ── Analyze mode: run fresh analysis ──
           setIsAnalyzing(true);
@@ -295,6 +440,7 @@ function TerminalPageInner() {
         body: JSON.stringify({
           question: text,
           contractText: contractText || undefined,
+          contractId: linkedContractId || undefined,
         }),
       });
 
@@ -440,83 +586,43 @@ function TerminalPageInner() {
     setAnalysisComplete(false);
     setAnalysisResult(null);
     setIsAnalyzing(false);
+    setIsTyping(false);
+    setLinkedContractId(null);
+    setAnalysisId(null);
+    setAcknowledgedFindings([]);
   };
 
-  // ── Analysis result cards component ─────────────────────────────────────
-  const AnalysisResultCards = ({ result }: { result: AnalysisResult }) => (
-    <div className="w-full space-y-4">
-      {/* Risk Score */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <RiskScoreCard
-          score={result.riskScore}
-          verdict={result.riskVerdict}
-          isVisible={true}
-        />
-      </motion.div>
+  // ── Looks Good — toggle acknowledged state ──────────────────────────────
+  const handleAcknowledgeToggle = async (title: string) => {
+    if (!analysisId) return;
+    const prev = [...acknowledgedFindings];
+    const updated = prev.includes(title)
+      ? prev.filter(t => t !== title)
+      : [...prev, title];
+    setAcknowledgedFindings(updated); // optimistic
+    try {
+      await fetch("/api/contract-analyses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: analysisId, acknowledged_findings: updated }),
+      });
+    } catch {
+      setAcknowledgedFindings(prev); // revert on error
+    }
+  };
 
-      {/* Finding Cards */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
-      >
-        <FindingCards findings={result.findings} isVisible={true} />
-      </motion.div>
+  // ── Tell Me More — inject finding into chat ──────────────────────────────
+  const handleTellMeMore = (finding: Finding) => {
+    const msg = `Tell me more about the **${finding.title}** finding (${finding.severity} severity).\n\n${finding.issue}\n\nWhat are the real-world implications and how can I negotiate or address this clause?`;
+    handleSendMessage(msg);
+  };
 
-      {/* Key Takeaways */}
-      {result.summary.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-white border border-[#e0d9ce] rounded-xl p-5"
-        >
-          <h3 className="text-sm font-semibold text-[#1a1714] mb-3">Key Takeaways</h3>
-          <ul className="space-y-2">
-            {result.summary.map((point, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-[#3a3530]">
-                <span className="text-[#c8873a] mt-0.5">•</span>
-                {point}
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      )}
-
-      {/* Missing Protections */}
-      {result.missing.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="bg-[#FFF8F0] border border-[#F59E0B]/30 rounded-xl p-5"
-        >
-          <h3 className="text-sm font-semibold text-[#92400e] mb-3">Missing Protections</h3>
-          <ul className="space-y-1.5">
-            {result.missing.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-[#78350f]">
-                <span className="mt-0.5">⚠️</span>
-                {item}
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-      )}
-
-      {/* Disclaimer */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.7 }}
-        className="text-center text-xs text-[#9a8f82] pt-2"
-      >
-        ⚖️ This analysis is for informational purposes only and does not constitute legal advice.
-      </motion.p>
-    </div>
-  );
+  // ── Choice selection handler ─────────────────────────────────────────────
+  const handleChoiceSelect = (messageId: string, label: string) => {
+    if (isAnalyzing || isTyping) return;
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, choicesUsed: true } : m));
+    handleSendMessage(label);
+  };
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -703,36 +809,72 @@ function TerminalPageInner() {
               ) : (
                 <div className="max-w-3xl mx-auto space-y-4">
                   {/* Message list */}
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      {message.type === "analysis" && message.analysisResult ? (
-                        // Analysis result cards - render inline at correct position
-                        <div className="w-full max-w-2xl">
-                          <AnalysisResultCards result={message.analysisResult} />
-                        </div>
-                      ) : message.content === "" ? null : (
-                        // Regular text message
-                        <div
-                          className={`${
-                            message.role === "user"
-                              ? "bg-[#f5f0e8] text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_4px_16px] p-[12px_16px] text-[13px] max-w-[70%]"
-                              : "bg-white text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_16px_4px] p-[12px_16px] text-[13px] max-w-[85%]"
-                          }`}
-                        >
-                          <MarkdownMessage
-                            content={message.content}
-                            isUser={message.role === "user"}
-                          />
-                          <div className="text-[10px] text-[#9a8f82] mt-1">
-                            {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {messages.map((message) => {
+                    // Don't render a wrapper div for empty streaming placeholders
+                    if (message.content === "" && message.type !== "analysis" && message.type !== "choices") return null;
+
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        {message.type === "analysis" && message.analysisResult ? (
+                          // Analysis result cards - render inline at correct position
+                          <div className="w-full max-w-2xl">
+                            <AnalysisResultCards
+                              result={message.analysisResult}
+                              acknowledgedFindings={acknowledgedFindings}
+                              onAcknowledgeToggle={handleAcknowledgeToggle}
+                              onTellMeMore={handleTellMeMore}
+                            />
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        ) : message.type === "choices" && message.choices ? (
+                          // Multiple choice message
+                          <div className="max-w-[85%] space-y-2">
+                            <div className="bg-white text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_16px_4px] p-[12px_16px] text-[13px]">
+                              <MarkdownMessage content={message.content} isUser={false} />
+                              <div className="text-[10px] text-[#9a8f82] mt-1">
+                                {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                            {!message.choicesUsed && (
+                              <div className="space-y-1.5">
+                                {message.choices.map((choice) => (
+                                  <button
+                                    key={choice.id}
+                                    onClick={() => handleChoiceSelect(message.id, choice.label)}
+                                    className="w-full text-left px-4 py-3 bg-white border border-[#e0d9ce] rounded-xl hover:border-[#c8873a] hover:bg-[#fffbf5] transition-all"
+                                  >
+                                    <div className="font-medium text-[13px] text-[#1a1714]">{choice.label}</div>
+                                    {choice.description && (
+                                      <div className="text-[11px] text-[#9a8f82] mt-0.5">{choice.description}</div>
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // Regular text message
+                          <div
+                            className={`${
+                              message.role === "user"
+                                ? "bg-[#f5f0e8] text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_4px_16px] p-[12px_16px] text-[13px] max-w-[70%]"
+                                : "bg-white text-[#1a1714] border border-[#e0d9ce] rounded-[16px_16px_16px_4px] p-[12px_16px] text-[13px] max-w-[85%]"
+                            }`}
+                          >
+                            <MarkdownMessage
+                              content={message.content}
+                              isUser={message.role === "user"}
+                            />
+                            <div className="text-[10px] text-[#9a8f82] mt-1">
+                              {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* Thinking animation (only during analysis) */}
                   {isAnalyzing && (

@@ -23,3 +23,4 @@ export function getPlanFromPriceId(priceId: string): PlanKey {
   }
   return 'free';
 }
+

@@ -57,18 +57,81 @@ export async function POST(request: Request) {
 
     // Save user question
     if (contractId) {
-      await supabase.from('conversation_history').insert({
-        user_id: user.id,
-        contract_id: contractId,
-        role: 'user',
-        content: question
-      });
+      try {
+        await supabase.from('conversation_history').insert({
+          user_id: user.id,
+          contract_id: contractId,
+          role: 'user',
+          content: question
+        });
+      } catch {}
     }
 
-    const systemPrompt = buildSystemPrompt(userProfileContext);
+    // Build base system prompt
+    let systemPrompt = buildSystemPrompt(userProfileContext);
+
+    // Inject contract + analysis context when contractId is present
+    if (contractId) {
+      try {
+        const [contractRes, analysisRes] = await Promise.all([
+          supabase
+            .from('contracts')
+            .select('name, type, party_a, party_b, governing_law, effective_date, expiry_date, summary')
+            .eq('id', contractId)
+            .eq('user_id', user.id)
+            .single(),
+          supabase
+            .from('contract_analyses')
+            .select('risk_score, risk_level, selected_party, party_a_name, party_b_name, breakdown, narrative')
+            .eq('contract_id', contractId)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(),
+        ]);
+
+        const contract = contractRes.data;
+        const analysis = analysisRes.data;
+
+        if (contract || analysis) {
+          const partyName = analysis?.selected_party === 'party_a'
+            ? (analysis?.party_a_name || contract?.party_a)
+            : analysis?.selected_party === 'party_b'
+              ? (analysis?.party_b_name || contract?.party_b)
+              : null;
+
+          const contractCtx = [
+            `\n\n== CONTRACT CONTEXT ==`,
+            contract?.name ? `Contract: ${contract.name}` : null,
+            contract?.type ? `Type: ${contract.type}` : null,
+            contract?.party_a && contract?.party_b ? `Parties: ${contract.party_a} and ${contract.party_b}` : null,
+            contract?.governing_law ? `Governing Law: ${contract.governing_law}` : null,
+            contract?.summary ? `Summary: ${contract.summary}` : null,
+          ].filter(Boolean).join('\n');
+
+          const analysisCtx = analysis ? [
+            `\n== EXISTING ANALYSIS ==`,
+            `Risk Score: ${analysis.risk_score}/100 (${analysis.risk_level})`,
+            analysis.selected_party ? `User's Party: ${analysis.selected_party}${partyName ? ` (${partyName})` : ''}` : null,
+            analysis.breakdown ? `Findings: ${JSON.stringify(analysis.breakdown).substring(0, 2000)}` : null,
+            `\nINSTRUCTIONS:`,
+            `- Do NOT re-analyze the contract from scratch`,
+            `- Use existing findings as your reference`,
+            partyName ? `- Always answer from ${partyName}'s perspective` : null,
+            partyName ? `- Refer to the user as ${partyName} or "you"` : null,
+            `- Do NOT ask which party the user is — it is already known`,
+          ].filter(Boolean).join('\n') : '';
+
+          systemPrompt = systemPrompt + contractCtx + analysisCtx;
+        }
+      } catch (ctxErr) {
+        console.error('[Chat] Failed to load contract context:', ctxErr);
+      }
+    }
 
     let userPrompt = question;
-    if (contractText) {
+    if (contractText && !contractId) {
+      // Only use raw contractText if there's no contractId (no DB context)
       userPrompt = `Contract Context:\n${contractText.substring(0, 3000)}\n\nUser Question: ${question}`;
     }
 

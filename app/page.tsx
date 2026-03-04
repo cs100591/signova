@@ -17,6 +17,7 @@ import {
   FileCheck
 } from "lucide-react";
 import Link from "next/link";
+import { SignovaLogo } from "@/components/SignovaLogo";
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -40,7 +41,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2">
-              <span className="text-2xl font-serif tracking-tight">Signova</span>
+              <SignovaLogo size={32} textClassName="text-2xl text-[#1a1714]" />
             </Link>
 
             {/* Desktop Nav */}
@@ -381,7 +382,7 @@ export default function LandingPage() {
       <footer className="py-12 border-t border-[#ddd5c8]">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <span className="text-xl font-serif">Signova</span>
+            <SignovaLogo size={24} textClassName="text-xl text-[#1a1714]" />
             <p className="text-sm text-[#7a7168]">
               © 2026 Signova. AI contract analysis for everyone.
             </p>

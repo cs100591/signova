@@ -7,6 +7,7 @@ import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle2, Loader2 } from "luci
 import Link from "next/link";
 import { supabaseClient } from "@/lib/supabase";
 import { WaitingRobot } from "@/components/illustrations";
+import { SignovaLogo } from "@/components/SignovaLogo";
 
 function LoginForm() {
   const router = useRouter();
@@ -134,8 +135,8 @@ function LoginForm() {
     <div className="min-h-screen bg-[#f5f0e8] flex flex-col">
       {/* Header */}
       <header className="px-6 py-6">
-        <Link href="/" className="text-2xl font-serif text-[#1a1714]">
-          Signova
+        <Link href="/" className="inline-block">
+          <SignovaLogo size={32} textClassName="text-2xl text-[#1a1714]" />
         </Link>
       </header>
 

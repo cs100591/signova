@@ -88,9 +88,19 @@ export default function SubscriptionManager() {
         }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch (err) {
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to initiate checkout");
+      }
+      
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL returned");
+      }
+    } catch (err: any) {
       console.error("Upgrade failed:", err);
+      alert(err.message || "An error occurred while upgrading.");
     } finally {
       setUpgrading(null);
     }
@@ -101,9 +111,19 @@ export default function SubscriptionManager() {
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-    } catch (err) {
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to open billing portal");
+      }
+      
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No portal URL returned");
+      }
+    } catch (err: any) {
       console.error("Portal failed:", err);
+      alert(err.message || "An error occurred while opening the billing portal.");
     } finally {
       setManagingBilling(false);
     }

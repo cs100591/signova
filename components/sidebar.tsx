@@ -4,20 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText, Sparkles, Settings, HelpCircle } from "lucide-react";
 import WorkspaceSwitcher from "./workspace-switcher";
+import { SignovaLogo } from "./SignovaLogo";
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[260px] bg-[#F8F7F4] border-r border-[#E5E7EB] flex flex-col h-full">
+    <aside className="hidden md:flex w-[260px] bg-[#F8F7F4] border-r border-[#E5E7EB] flex-col h-full">
       {/* Logo */}
       <div className="p-6 border-b border-[#E5E7EB]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#1A1A1A] flex items-center justify-center">
-            <span className="text-white font-bold text-sm">S</span>
-          </div>
-          <span className="font-semibold text-[#1A1A1A]">Signova</span>
-        </div>
+        <SignovaLogo size={30} />
       </div>
 
       {/* Workspace Switcher */}
