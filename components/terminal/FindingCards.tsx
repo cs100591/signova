@@ -63,8 +63,8 @@ function FindingCard({ finding, index, isAcknowledged, onAcknowledgeToggle, onTe
           contractText: finding.quote || finding.issue,
         }),
       });
-      const data = await res.json();
-      setExplanation(data.response);
+      const text = await res.text();
+      setExplanation(text);
     } catch (err) {
       setExplanation("Failed to fetch explanation. Please try again.");
     } finally {
