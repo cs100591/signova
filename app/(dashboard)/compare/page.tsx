@@ -1,0 +1,309 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { GitMerge, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import type { HighlightedPdfViewerHandle, ComparedChunk } from "@/components/compare/HighlightedPdfViewer";
+import ChangeSummaryPanel, { ComparisonMatch } from "@/components/compare/ChangeSummaryPanel";
+
+// Lazy-load the PDF viewer to avoid SSR issues
+const HighlightedPdfViewer = dynamic(
+  () => import("@/components/compare/HighlightedPdfViewer"),
+  { ssr: false }
+);
+
+type Contract = {
+  id: string;
+  name: string;
+  type: string;
+  file_url: string;
+};
+
+type ComparisonResult = {
+  sameType: boolean;
+  typeWarning: string | null;
+  matches: ComparisonMatch[];
+};
+
+type ApiResponse = {
+  comparison: ComparisonResult;
+  chunksA: ComparedChunk[];
+  chunksB: ComparedChunk[];
+  comparisonId: string;
+};
+
+function buildViewerChunks(
+  chunks: ComparedChunk[],
+  matches: ComparisonMatch[],
+  side: "A" | "B"
+): ComparedChunk[] {
+  return chunks.map((chunk) => {
+    const match = matches.find((m) =>
+      side === "A" ? m.chunkA === chunk.id : m.chunkB === chunk.id
+    );
+    if (!match) return chunk;
+    return {
+      ...chunk,
+      riskLevel: side === "A" ? match.riskA : match.riskB,
+      riskChange: match.riskChange,
+      changeType: match.changeType,
+      topic: match.topic,
+      summary: match.summary,
+    };
+  });
+}
+
+export default function ComparePage() {
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [contractA, setContractA] = useState<Contract | null>(null);
+  const [contractB, setContractB] = useState<Contract | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<ApiResponse | null>(null);
+  const [warningDismissed, setWarningDismissed] = useState(false);
+
+  const viewerARef = useRef<HighlightedPdfViewerHandle>(null);
+  const viewerBRef = useRef<HighlightedPdfViewerHandle>(null);
+
+  // Fetch user's contracts for the selectors
+  useEffect(() => {
+    fetch("/api/contracts")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setContracts(data.filter((c) => c.file_url));
+        else if (Array.isArray(data?.contracts)) setContracts(data.contracts.filter((c: Contract) => c.file_url));
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleCompare = useCallback(async () => {
+    if (!contractA || !contractB) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setWarningDismissed(false);
+
+    try {
+      const res = await fetch("/api/contracts/compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractAUrl: contractA.file_url,
+          contractBUrl: contractB.file_url,
+          contractAId: contractA.id,
+          contractBId: contractB.id,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Error ${res.status}`);
+      }
+
+      const data: ApiResponse = await res.json();
+      setResult(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Comparison failed");
+    } finally {
+      setLoading(false);
+    }
+  }, [contractA, contractB]);
+
+  const handleSelectMatch = useCallback(
+    (index: number) => {
+      if (!result) return;
+      const match = result.comparison.matches[index];
+      if (match.chunkA) viewerARef.current?.scrollToChunk(match.chunkA);
+      if (match.chunkB) viewerBRef.current?.scrollToChunk(match.chunkB);
+    },
+    [result]
+  );
+
+  const chunksA = result
+    ? buildViewerChunks(result.chunksA, result.comparison.matches, "A")
+    : [];
+  const chunksB = result
+    ? buildViewerChunks(result.chunksB, result.comparison.matches, "B")
+    : [];
+
+  const showWarning =
+    result && !result.comparison.sameType && !warningDismissed;
+
+  return (
+    <div className="flex flex-col h-full bg-[#F8F7F4]">
+      {/* Top bar */}
+      <div className="flex-shrink-0 border-b border-[#e0d9ce] bg-white px-4 py-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2 text-[#1a1714] font-semibold text-sm mr-2">
+            <GitMerge className="w-4 h-4 text-[#c8873a]" />
+            Compare Contracts
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1 w-full">
+            <ContractSelector
+              contracts={contracts}
+              value={contractA}
+              onChange={setContractA}
+              placeholder="Contract A"
+              exclude={contractB?.id}
+            />
+
+            <span className="text-[#9a8f82] text-xs font-medium hidden sm:block">vs</span>
+
+            <ContractSelector
+              contracts={contracts}
+              value={contractB}
+              onChange={setContractB}
+              placeholder="Contract B"
+              exclude={contractA?.id}
+            />
+
+            <button
+              onClick={handleCompare}
+              disabled={!contractA || !contractB || loading}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a1714] text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2d2a27] transition-colors flex-shrink-0"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Comparing…
+                </>
+              ) : (
+                <>
+                  <GitMerge className="w-4 h-4" />
+                  Compare
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Warning banner */}
+      {showWarning && (
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-start gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm text-amber-800">
+            <span className="font-semibold">Different contract types detected.</span>{" "}
+            {result.comparison.typeWarning || "These contracts may be different types — comparison results may be less accurate."}
+          </div>
+          <button
+            onClick={() => setWarningDismissed(true)}
+            className="text-xs text-amber-600 hover:text-amber-800 font-medium flex-shrink-0"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Main content */}
+      {!result && !loading && (
+        <EmptyState hasContracts={contracts.length > 0} />
+      )}
+
+      {loading && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-[#9a8f82]">
+            <Loader2 className="w-8 h-8 animate-spin text-[#c8873a]" />
+            <p className="text-sm">Extracting and comparing contracts…</p>
+            <p className="text-xs">This may take up to 30 seconds</p>
+          </div>
+        </div>
+      )}
+
+      {result && !loading && (
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_1fr_300px] min-h-0 overflow-hidden">
+          {/* Contract A PDF */}
+          <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
+            <HighlightedPdfViewer
+              ref={viewerARef}
+              pdfUrl={contractA!.file_url}
+              chunks={chunksA}
+              label={`Contract A — ${contractA!.name}`}
+            />
+          </div>
+
+          {/* Contract B PDF */}
+          <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
+            <HighlightedPdfViewer
+              ref={viewerBRef}
+              pdfUrl={contractB!.file_url}
+              chunks={chunksB}
+              label={`Contract B — ${contractB!.name}`}
+            />
+          </div>
+
+          {/* Summary panel */}
+          <div className="min-h-0 overflow-hidden">
+            <ChangeSummaryPanel
+              matches={result.comparison.matches}
+              onSelectMatch={handleSelectMatch}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ContractSelector({
+  contracts,
+  value,
+  onChange,
+  placeholder,
+  exclude,
+}: {
+  contracts: Contract[];
+  value: Contract | null;
+  onChange: (c: Contract | null) => void;
+  placeholder: string;
+  exclude?: string;
+}) {
+  const available = contracts.filter((c) => c.id !== exclude);
+
+  return (
+    <div className="relative flex-1 w-full min-w-[160px] max-w-xs">
+      <select
+        value={value?.id ?? ""}
+        onChange={(e) => {
+          const selected = available.find((c) => c.id === e.target.value) ?? null;
+          onChange(selected);
+        }}
+        className="w-full appearance-none bg-[#F8F7F4] border border-[#e0d9ce] rounded-lg px-3 py-2 pr-8 text-sm text-[#1a1714] focus:outline-none focus:border-[#c8873a] transition-colors cursor-pointer"
+      >
+        <option value="">{placeholder}</option>
+        {available.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name} ({c.type || "Contract"})
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8f82] pointer-events-none" />
+    </div>
+  );
+}
+
+function EmptyState({ hasContracts }: { hasContracts: boolean }) {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="text-center max-w-sm px-4">
+        <div className="w-14 h-14 rounded-2xl bg-[#f5f0e8] flex items-center justify-center mx-auto mb-4">
+          <GitMerge className="w-7 h-7 text-[#c8873a]" />
+        </div>
+        <h3 className="text-base font-semibold text-[#1a1714] mb-2">Compare two contracts</h3>
+        <p className="text-sm text-[#9a8f82]">
+          {hasContracts
+            ? "Select two contracts above and click Compare to see AI-powered risk highlights and a change summary."
+            : "Upload contracts first, then come back to compare them side by side."}
+        </p>
+      </div>
+    </div>
+  );
+}

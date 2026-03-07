@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Sparkles, Settings, HelpCircle } from "lucide-react";
+import { FileText, GitMerge, Sparkles, Settings, HelpCircle } from "lucide-react";
 import WorkspaceSwitcher from "./workspace-switcher";
 import { SignovaLogo } from "./SignovaLogo";
 
@@ -34,6 +34,18 @@ export default function Sidebar() {
           >
             <FileText className="w-4 h-4" />
             Contracts
+          </Link>
+
+          <Link
+            href="/compare"
+            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === "/compare" || pathname.startsWith("/compare/")
+                ? "bg-white text-[#1A1A1A] shadow-sm"
+                : "text-[#6B7280] hover:bg-white hover:text-[#374151]"
+            }`}
+          >
+            <GitMerge className="w-4 h-4" />
+            Compare
           </Link>
 
           <Link
