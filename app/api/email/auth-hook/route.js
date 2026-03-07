@@ -86,6 +86,17 @@ export async function POST(request) {
 
   console.log('[Auth Hook] Received payload keys:', Object.keys(body || {}))
 
+  // DB trigger format: { type: 'INSERT', schema: 'auth', table: 'users', record: { id, email, ... } }
+  // This is sent by our pg_net trigger on auth.users INSERT
+  if (body?.type === 'INSERT' && body?.record?.id) {
+    console.log('[Auth Hook] DB trigger signup for:', body.record.email)
+    await triggerOnboardingWelcome({
+      id: body.record.id,
+      email: body.record.email,
+    })
+    return Response.json({ message: 'ok' }, { status: 200 })
+  }
+
   try {
     const { user, email_data } = body
     const { token_hash, email_action_type } = email_data || {}
