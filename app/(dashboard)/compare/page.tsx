@@ -51,10 +51,14 @@ function buildViewerChunks(
   const chunkToMatchMap = new Map<string, { match: ComparisonMatch; matchIndex: number; isPrimary: boolean }>();
   
   // First pass: assign matches to their directly referenced chunks
-  matches.forEach((match, matchIndex) => {
+  // Only assign sequential numbers to chunks that actually exist
+  let validMatchIndex = 0;
+  matches.forEach((match) => {
     const chunkId = side === "A" ? match.chunkA : match.chunkB;
-    if (chunkId) {
-      chunkToMatchMap.set(chunkId, { match, matchIndex: matchIndex + 1, isPrimary: true }); // 1-based indexing
+    // Only assign number if chunkId exists AND the chunk is in our chunks array
+    if (chunkId && chunks.some(c => c.id === chunkId)) {
+      validMatchIndex++;
+      chunkToMatchMap.set(chunkId, { match, matchIndex: validMatchIndex, isPrimary: true });
     }
   });
 
