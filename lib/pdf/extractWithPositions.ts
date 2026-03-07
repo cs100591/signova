@@ -9,10 +9,9 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 
 async function getPdfjs() {
   const pdfjsLib = await import('pdfjs-dist')
-  // For Node.js server environment, point to the local worker file
+  // Use CDN worker URL — works in any environment (local Node.js + Vercel Linux)
   // pdfjs-dist v5+ requires a valid workerSrc (empty string no longer works)
-  const workerPath = require.resolve('pdfjs-dist/build/pdf.worker.mjs')
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `file://${workerPath}`
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
   return pdfjsLib
 }
 
