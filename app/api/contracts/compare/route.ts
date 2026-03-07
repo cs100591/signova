@@ -10,8 +10,8 @@ async function loadAI() {
 }
 
 async function loadPDF() {
-  const { extractPdfChunks } = await import('@/lib/pdf/extractWithPositions')
-  return { extractPdfChunks }
+  const { extractChunksWithFallback } = await import('@/lib/pdf/extractWithPositions')
+  return { extractChunksWithFallback }
 }
 
 async function loadR2() {
@@ -86,64 +86,9 @@ async function toPresignedUrl(rawUrl: string, requestId: string): Promise<string
 }
 
 /**
- * Fetch PDF with detailed logging and timeout
+ * Extract chunks with logging wrapper
  */
-async function fetchPdf(url: string, requestId: string, label: string): Promise<Buffer> {
-  const timer = startTimer()
-  log(requestId, 'info', `Fetching PDF ${label}`, { url: url.substring(0, 100) })
-  
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
-    
-    const response = await fetch(url, { 
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/pdf,*/*'
-      }
-    })
-    clearTimeout(timeoutId)
-    
-    const elapsed = getElapsedMs(timer)
-    
-    if (!response.ok) {
-      log(requestId, 'error', `PDF fetch failed ${label}`, {
-        status: response.status,
-        statusText: response.statusText,
-        elapsedMs: elapsed
-      })
-      throw new Error(`Failed to fetch PDF ${label}: HTTP ${response.status} ${response.statusText}`)
-    }
-    
-    const buffer = Buffer.from(await response.arrayBuffer())
-    
-    log(requestId, 'info', `PDF fetched successfully ${label}`, {
-      size: buffer.length,
-      contentType: response.headers.get('content-type'),
-      elapsedMs: elapsed
-    })
-    
-    return buffer
-  } catch (err) {
-    const elapsed = getElapsedMs(timer)
-    
-    if (err instanceof Error && err.name === 'AbortError') {
-      log(requestId, 'error', `PDF fetch timeout ${label}`, { elapsedMs: elapsed })
-      throw new Error(`Timeout fetching PDF ${label} after 30 seconds`)
-    }
-    
-    log(requestId, 'error', `PDF fetch error ${label}`, {
-      error: err instanceof Error ? err.message : String(err),
-      elapsedMs: elapsed
-    })
-    throw err
-  }
-}
-
-/**
- * Extract chunks from PDF or fallback to extracted_text from database
- */
-async function extractChunksWithFallback(
+async function extractWithLogging(
   pdfUrl: string, 
   contractId: string | null,
   requestId: string,
@@ -151,11 +96,10 @@ async function extractChunksWithFallback(
 ): Promise<any[]> {
   const timer = startTimer()
   
-  // Try 1: Extract from PDF URL
   try {
     log(requestId, 'info', 'Attempting PDF extraction', { contractId })
-    const { extractPdfChunks } = await loadPDF()
-    const chunks = await extractPdfChunks(pdfUrl)
+    const { extractChunksWithFallback } = await loadPDF()
+    const chunks = await extractChunksWithFallback(pdfUrl, contractId, supabase)
     
     const elapsed = getElapsedMs(timer)
     log(requestId, 'info', 'PDF extraction successful', {
@@ -165,63 +109,14 @@ async function extractChunksWithFallback(
     })
     
     return chunks
-  } catch (pdfError) {
+  } catch (error) {
     const elapsed = getElapsedMs(timer)
-    log(requestId, 'warn', 'PDF extraction failed, trying fallback', {
+    log(requestId, 'error', 'PDF extraction failed', {
       contractId,
-      error: pdfError instanceof Error ? pdfError.message : String(pdfError),
+      error: error instanceof Error ? error.message : String(error),
       elapsedMs: elapsed
     })
-    
-    // Try 2: Fallback to database extracted_text
-    if (contractId) {
-      try {
-        log(requestId, 'info', 'Fetching extracted_text from database', { contractId })
-        
-        const { data: contract, error } = await supabase
-          .from('contracts')
-          .select('extracted_text, contract_name')
-          .eq('id', contractId)
-          .single()
-        
-        if (error) {
-          log(requestId, 'error', 'Database fetch error', { contractId, error: error.message })
-        } else if (contract?.extracted_text) {
-          // Convert extracted_text to chunks format
-          const lines = contract.extracted_text.split('\n').filter((line: string) => line.trim().length > 5)
-          const chunks = lines.map((line: string, index: number) => ({
-            id: `chunk_fallback_${index}`,
-            text: line.trim(),
-            page: 1, // We don't know the page without PDF parsing
-            x: 50,
-            y: index * 14,
-            width: Math.min(line.length * 6, 512),
-            height: 14,
-            pageWidth: 612,
-            pageHeight: 792,
-          }))
-          
-          log(requestId, 'info', 'Fallback extraction successful', {
-            contractId,
-            chunks: chunks.length,
-            source: 'extracted_text'
-          })
-          
-          return chunks
-        } else {
-          log(requestId, 'warn', 'No extracted_text found in database', { contractId })
-        }
-      } catch (fallbackError) {
-        log(requestId, 'error', 'Fallback extraction failed', {
-          contractId,
-          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-        })
-      }
-    }
-    
-    // Both methods failed
-    log(requestId, 'error', 'All extraction methods failed', { contractId })
-    throw pdfError
+    throw error
   }
 }
 
@@ -302,8 +197,8 @@ export async function POST(request: NextRequest) {
       // Step 2: Extract chunks from both sources with fallback
       const extractTimer = startTimer()
       const [chunksA, chunksB] = await Promise.all([
-        extractChunksWithFallback(signedUrlA, contractAId, requestId, supabase),
-        extractChunksWithFallback(signedUrlB, contractBId, requestId, supabase),
+        extractWithLogging(signedUrlA, contractAId, requestId, supabase),
+        extractWithLogging(signedUrlB, contractBId, requestId, supabase),
       ])
       
       log(requestId, 'info', 'Chunks extracted', {
