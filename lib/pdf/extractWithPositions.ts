@@ -1,4 +1,6 @@
 import type { TextItem as PdfjsTextItem } from 'pdfjs-dist/types/src/display/api'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 
 // Polyfill DOMMatrix for Node.js (required by pdfjs-dist in server environment)
 if (typeof globalThis.DOMMatrix === 'undefined') {
@@ -7,11 +9,21 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
   globalThis.DOMMatrix = DOMMatrix
 }
 
+let _workerSrc: string | null = null
+
+function getWorkerSrc(): string {
+  if (_workerSrc) return _workerSrc
+  // Inline the worker as a data: URL so it works in both local Node.js and Vercel Linux
+  // Node.js ESM only supports file: and data: URLs — https: is not allowed
+  const workerPath = join(process.cwd(), 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs')
+  const workerData = readFileSync(workerPath, 'base64')
+  _workerSrc = `data:text/javascript;base64,${workerData}`
+  return _workerSrc
+}
+
 async function getPdfjs() {
   const pdfjsLib = await import('pdfjs-dist')
-  // Use CDN worker URL — works in any environment (local Node.js + Vercel Linux)
-  // pdfjs-dist v5+ requires a valid workerSrc (empty string no longer works)
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`
+  pdfjsLib.GlobalWorkerOptions.workerSrc = getWorkerSrc()
   return pdfjsLib
 }
 
