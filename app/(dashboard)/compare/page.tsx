@@ -39,7 +39,14 @@ function buildViewerChunks(
   matches: ComparisonMatch[],
   side: "A" | "B"
 ): ComparedChunk[] {
-  return chunks.map((chunk) => {
+  console.log(`[buildViewerChunks ${side}] Input:`, {
+    chunkCount: chunks.length,
+    matchCount: matches.length,
+    sampleChunkIds: chunks.slice(0, 3).map(c => c.id),
+    sampleMatchChunkRefs: matches.slice(0, 3).map(m => ({ chunkA: m.chunkA, chunkB: m.chunkB }))
+  });
+
+  const result = chunks.map((chunk) => {
     const match = matches.find((m) =>
       side === "A" ? m.chunkA === chunk.id : m.chunkB === chunk.id
     );
@@ -53,6 +60,15 @@ function buildViewerChunks(
       summary: match.summary,
     };
   });
+
+  const enhancedCount = result.filter(c => c.riskLevel || c.riskChange || c.changeType).length;
+  console.log(`[buildViewerChunks ${side}] Output:`, {
+    totalChunks: result.length,
+    enhancedWithRiskInfo: enhancedCount,
+    sampleEnhanced: result.filter(c => c.riskLevel).slice(0, 2).map(c => ({ id: c.id, riskLevel: c.riskLevel, changeType: c.changeType }))
+  });
+
+  return result;
 }
 
 export default function ComparePage() {
