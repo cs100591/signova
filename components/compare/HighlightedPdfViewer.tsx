@@ -95,7 +95,8 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
           </div>
         )}
         <div className="flex-1 relative overflow-hidden">
-          <PdfLoader url={pdfUrl} beforeLoad={<PdfLoadingSpinner />} errorMessage={<PdfErrorDisplay />}>
+          <div style={{ position: "absolute", inset: 0 }}>
+            <PdfLoader url={pdfUrl} beforeLoad={<PdfLoadingSpinner />} errorMessage={<PdfErrorDisplay />}>
             {(pdfDocument) => (
               <PdfHighlighter
                 pdfDocument={pdfDocument}
@@ -127,6 +128,7 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
               />
             )}
           </PdfLoader>
+          </div>
         </div>
       </div>
     );
