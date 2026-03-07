@@ -9,8 +9,10 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
 
 async function getPdfjs() {
   const pdfjsLib = await import('pdfjs-dist')
-  // Disable worker for server-side (Node.js) usage
-  pdfjsLib.GlobalWorkerOptions.workerSrc = ''
+  // For Node.js server environment, point to the local worker file
+  // pdfjs-dist v5+ requires a valid workerSrc (empty string no longer works)
+  const workerPath = require.resolve('pdfjs-dist/build/pdf.worker.mjs')
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `file://${workerPath}`
   return pdfjsLib
 }
 
