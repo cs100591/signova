@@ -45,11 +45,17 @@ type TextItem = Pick<PdfjsTextItem, 'str' | 'transform' | 'width' | 'height'>
  */
 export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   const pdfjsLib = await getPdfjs()
-  const loadingTask = pdfjsLib.getDocument({
-    url: pdfUrl,
-    disableAutoFetch: true,
-    disableStream: true,
-  })
+
+  // Fetch PDF as buffer first — avoids pdfjs making its own HTTP request
+  // which fails on private/signed R2 URLs returning 400
+  const response = await fetch(pdfUrl)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
+  }
+  const arrayBuffer = await response.arrayBuffer()
+  const data = new Uint8Array(arrayBuffer)
+
+  const loadingTask = pdfjsLib.getDocument({ data })
 
   const pdf = await loadingTask.promise
   const chunks: PdfChunk[] = []
