@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
+
 // DOMMatrix polyfill for Node.js (required by pdfjs-dist)
 // Node.js 22 does not include DOMMatrix, and @napi-rs/canvas (pdfjs's fallback)
 // is not available on Vercel. This pure-JS polyfill covers what pdfjs needs.
@@ -145,13 +148,23 @@ interface TextItem {
   hasEOL: boolean
 }
 
+// Cache for worker data URL
+let _workerDataUrl: string | null = null
+
+// Get worker as data: URL — Node.js ESM only supports file: and data: URLs
+function getWorkerDataUrl(): string {
+  if (_workerDataUrl) return _workerDataUrl
+  const workerPath = join(process.cwd(), 'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs')
+  const workerData = readFileSync(workerPath, 'base64')
+  _workerDataUrl = `data:text/javascript;base64,${workerData}`
+  return _workerDataUrl
+}
+
 // Dynamically import pdfjs-dist to avoid module loading issues at build time
 async function loadPdfJs() {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  // Use unpkg CDN for worker — avoids file:// URL issues on Vercel Linux
-  // Note: worker is loaded from CDN, not local file system
-  const version = (pdfjs as any).version || '5.4.624'
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/legacy/build/pdf.worker.mjs`
+  // Use data: URL for worker — Node.js ESM only supports file: and data: protocols
+  pdfjs.GlobalWorkerOptions.workerSrc = getWorkerDataUrl()
   return pdfjs
 }
 
