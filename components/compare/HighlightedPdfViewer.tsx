@@ -65,28 +65,33 @@ function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
     colors: filtered.map(c => ({ id: c.id, color: getHighlightColor(c) }))
   });
 
+  // PDF dimensions in points
+  const PDF_WIDTH = 612
+  const PDF_HEIGHT = 792
+
   const highlights = filtered.map((chunk) => ({
     id: chunk.id,
     content: { text: chunk.text },
     comment: { text: chunk.summary || chunk.topic || "", emoji: "" },
     position: {
       boundingRect: {
-        x1: chunk.x,
-        y1: chunk.y,
-        x2: chunk.x + chunk.width,
-        y2: chunk.y + chunk.height,
-        width: 612, // standard PDF width in pts
-        height: 792,
+        // Convert pt to percentage for react-pdf-highlighter
+        x1: (chunk.x / PDF_WIDTH) * 100,
+        y1: (chunk.y / PDF_HEIGHT) * 100,
+        x2: ((chunk.x + chunk.width) / PDF_WIDTH) * 100,
+        y2: ((chunk.y + chunk.height) / PDF_HEIGHT) * 100,
+        width: 100, // percentage
+        height: 100, // percentage
         pageNumber: chunk.page,
       },
       rects: [
         {
-          x1: chunk.x,
-          y1: chunk.y,
-          x2: chunk.x + chunk.width,
-          y2: chunk.y + chunk.height,
-          width: 612,
-          height: 792,
+          x1: (chunk.x / PDF_WIDTH) * 100,
+          y1: (chunk.y / PDF_HEIGHT) * 100,
+          x2: ((chunk.x + chunk.width) / PDF_WIDTH) * 100,
+          y2: ((chunk.y + chunk.height) / PDF_HEIGHT) * 100,
+          width: 100,
+          height: 100,
           pageNumber: chunk.page,
         },
       ],
