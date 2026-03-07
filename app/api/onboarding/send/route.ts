@@ -1,7 +1,7 @@
 /**
  * POST /api/onboarding/send
  *
- * Daily cron endpoint. Called by Supabase pg_cron every day at 9:00 AM UTC.
+ * Daily cron endpoint. Called by Vercel Cron every day at 9:00 AM UTC (vercel.json).
  * Finds all users due for their next onboarding email and sends it.
  *
  * Auth: Bearer CRON_SECRET header required.
@@ -29,6 +29,8 @@ const supabase = createClient(
 )
 
 function verifyCronSecret(request: NextRequest): boolean {
+  // Vercel cron invocations include this header automatically
+  if (request.headers.get('x-vercel-cron') === '1') return true
   const secret = process.env.CRON_SECRET
   if (!secret) {
     console.warn('[Onboarding Cron] CRON_SECRET not set — skipping auth check')
