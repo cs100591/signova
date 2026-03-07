@@ -46,15 +46,14 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
           
           if (text.trim().length <= 3) return;
           
-          // pdf2json coordinates are relative to page (0-100 scale typically)
-          // Convert to PDF points
-          const x = (textBlock.x / 100) * pageWidth;
-          const y = (textBlock.y / 100) * pageHeight;
+          // pdf2json coordinates are NORMALIZED (0.0 to 1.0), NOT percentages
+          // pdf2json y=0 is at TOP, PDF.js y=0 is at BOTTOM (needs flip)
+          const x = textBlock.x * pageWidth;
+          const y = pageHeight * (1 - textBlock.y);  // Flip y-coordinate
           
-          // Estimate width based on text length and font size
-          const fontSize = textBlock.R?.[0]?.TS?.[1] || 12;
-          const width = Math.min(text.length * (fontSize * 0.6), pageWidth - x - 50);
-          const height = fontSize * 1.2;
+          // Use pdf2json's w/h if available (also normalized 0-1)
+          const width = (textBlock.w || 0) * pageWidth || Math.min(text.length * 7, pageWidth - x - 50);
+          const height = (textBlock.h || 0) * pageHeight || 14;
           
           chunks.push({
             id: `chunk_p${pageNum}_${chunkIndex++}`,
