@@ -46,12 +46,62 @@ function buildViewerChunks(
     sampleMatchChunkRefs: matches.slice(0, 3).map(m => ({ chunkA: m.chunkA, chunkB: m.chunkB }))
   });
 
-  const result = chunks.map((chunk) => {
-    const match = matches.find((m) =>
-      side === "A" ? m.chunkA === chunk.id : m.chunkB === chunk.id
+  // Create a map to track which chunks have been assigned to which match
+  // isPrimary: true for the originally matched chunk (shows badge), false for expanded chunks
+  const chunkToMatchMap = new Map<string, { match: ComparisonMatch; matchIndex: number; isPrimary: boolean }>();
+  
+  // First pass: assign matches to their directly referenced chunks
+  matches.forEach((match, matchIndex) => {
+    const chunkId = side === "A" ? match.chunkA : match.chunkB;
+    if (chunkId) {
+      chunkToMatchMap.set(chunkId, { match, matchIndex: matchIndex + 1, isPrimary: true }); // 1-based indexing
+    }
+  });
+
+  // Second pass: expand to nearby chunks (same section/topic)
+  // Find chunks that are close to matched chunks (within same page and nearby Y position)
+  const expandedChunks = new Set<string>();
+  
+  chunkToMatchMap.forEach((data, matchedChunkId) => {
+    if (!data.isPrimary) return; // Only expand from primary chunks
+    
+    const matchedChunk = chunks.find(c => c.id === matchedChunkId);
+    if (!matchedChunk) return;
+    
+    // Find all chunks on the same page that are nearby
+    const samePageChunks = chunks.filter(c => 
+      c.page === matchedChunk.page && 
+      c.id !== matchedChunkId &&
+      !chunkToMatchMap.has(c.id) // Don't override already matched chunks
     );
-    if (!match) return chunk;
-    const matchIndex = matches.indexOf(match);
+    
+    // If the matched chunk is a title (short text), include content chunks below it
+    const isTitle = matchedChunk.text.length < 50;
+    
+    samePageChunks.forEach(nearbyChunk => {
+      const yDiff = nearbyChunk.y - matchedChunk.y;
+      
+      // For titles: include chunks within 200 points below
+      // For content: include nearby chunks within 100 points
+      const threshold = isTitle ? 200 : 100;
+      
+      if (yDiff > 0 && yDiff < threshold) {
+        expandedChunks.add(nearbyChunk.id);
+        chunkToMatchMap.set(nearbyChunk.id, { 
+          match: data.match, 
+          matchIndex: data.matchIndex,
+          isPrimary: false // Expanded chunks don't show badge
+        });
+      }
+    });
+  });
+
+  // Build the final result
+  const result = chunks.map((chunk) => {
+    const mapping = chunkToMatchMap.get(chunk.id);
+    if (!mapping) return chunk;
+    
+    const { match, matchIndex, isPrimary } = mapping;
     return {
       ...chunk,
       riskLevel: side === "A" ? match.riskA : match.riskB,
@@ -59,15 +109,23 @@ function buildViewerChunks(
       changeType: match.changeType,
       topic: match.topic,
       summary: match.summary,
-      matchIndex: matchIndex >= 0 ? matchIndex + 1 : undefined,
+      matchIndex: isPrimary ? matchIndex : undefined, // Only primary chunks show badge
     };
   });
 
   const enhancedCount = result.filter(c => c.riskLevel || c.riskChange || c.changeType).length;
+  const primaryCount = result.filter(c => c.matchIndex).length;
   console.log(`[buildViewerChunks ${side}] Output:`, {
     totalChunks: result.length,
     enhancedWithRiskInfo: enhancedCount,
-    sampleEnhanced: result.filter(c => c.riskLevel).slice(0, 2).map(c => ({ id: c.id, riskLevel: c.riskLevel, changeType: c.changeType }))
+    primaryChunks: primaryCount,
+    expandedChunks: expandedChunks.size,
+    sampleEnhanced: result.filter(c => c.matchIndex).slice(0, 3).map(c => ({ 
+      id: c.id, 
+      matchIndex: c.matchIndex,
+      riskLevel: c.riskLevel, 
+      changeType: c.changeType 
+    }))
   });
 
   return result;
