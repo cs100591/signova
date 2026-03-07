@@ -1,21 +1,5 @@
 import { PDFParse, VerbosityLevel } from 'pdf-parse'
 
-// Polyfill Uint8Array.prototype.toHex for Node.js < 22 (required by pdfjs-dist v5)
-if (!(Uint8Array.prototype as unknown as Record<string, unknown>).toHex) {
-  Object.defineProperty(Uint8Array.prototype, 'toHex', {
-    value: function (): string {
-      return Array.from(this as Uint8Array)
-        .map((b: number) => b.toString(16).padStart(2, '0'))
-        .join('')
-    },
-    writable: true,
-    configurable: true,
-  })
-}
-
-// Disable web worker — use same-thread parsing (required for Node.js / Vercel)
-PDFParse.setWorker('')
-
 export type PdfChunk = {
   id: string
   text: string
@@ -31,12 +15,33 @@ const PDF_HEIGHT = 792 // standard PDF page height in pts
 const MARGIN_X = 50
 const MARGIN_Y = 72
 
+let workerInitialized = false
+
 /**
  * Extract text chunks with approximate coordinates from a PDF URL.
  * Uses pdf-parse v2 with stopAtErrors:false — recovers from bad XRef tables and other
  * structural PDF errors that crash older parsers (e.g. "bad XRef entry").
  */
 export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
+  // Polyfill Uint8Array.prototype.toHex for Node.js < 22 (required by pdfjs-dist v5)
+  if (!(Uint8Array.prototype as unknown as Record<string, unknown>).toHex) {
+    Object.defineProperty(Uint8Array.prototype, 'toHex', {
+      value: function (): string {
+        return Array.from(this as Uint8Array)
+          .map((b: number) => b.toString(16).padStart(2, '0'))
+          .join('')
+      },
+      writable: true,
+      configurable: true,
+    })
+  }
+
+  // Disable web worker once — use same-thread parsing (required for Vercel/Node.js)
+  if (!workerInitialized) {
+    try { PDFParse.setWorker('') } catch { /* ignore */ }
+    workerInitialized = true
+  }
+
   const response = await fetch(pdfUrl)
   if (!response.ok) {
     throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
