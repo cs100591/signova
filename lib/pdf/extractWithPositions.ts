@@ -1,8 +1,3 @@
-import { PDFParse, VerbosityLevel } from 'pdf-parse'
-
-// Disable web worker — use same-thread parsing (required for Vercel serverless)
-try { PDFParse.setWorker('') } catch { /* pdfjs may not be ready yet */ }
-
 export type PdfChunk = {
   id: string
   text: string
@@ -19,9 +14,93 @@ const MARGIN_X = 50
 const MARGIN_Y = 72
 
 /**
+ * Extract text from a PDF using Claude's native PDF vision capability.
+ * Returns text with page markers like [PAGE 1], [PAGE 2], etc.
+ */
+async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured')
+
+  const base64PDF = pdfBuffer.toString('base64')
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'pdfs-2024-09-25',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8000,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64PDF,
+              },
+            },
+            {
+              type: 'text',
+              text: 'Extract ALL text from this document. At the start of each page, insert a marker like [PAGE 1], [PAGE 2], etc. Preserve the structure and paragraphs. Return only the extracted text with page markers, nothing else.',
+            },
+          ],
+        },
+      ],
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Claude PDF extraction failed: ${response.status} — ${err.slice(0, 200)}`)
+  }
+
+  const data = await response.json()
+  return data.content?.[0]?.text || ''
+}
+
+/**
+ * Parse Claude-extracted text (with [PAGE N] markers) into page-level blocks.
+ */
+function parsePages(text: string): { pageNum: number; text: string }[] {
+  const pages: { pageNum: number; text: string }[] = []
+  const pageRegex = /\[PAGE\s+(\d+)\]/gi
+  const markers: { index: number; pageNum: number }[] = []
+
+  let match: RegExpExecArray | null
+  while ((match = pageRegex.exec(text)) !== null) {
+    markers.push({ index: match.index, pageNum: parseInt(match[1], 10) })
+  }
+
+  if (markers.length === 0) {
+    // No page markers found — treat entire text as page 1
+    if (text.trim().length > 0) {
+      pages.push({ pageNum: 1, text: text.trim() })
+    }
+    return pages
+  }
+
+  for (let i = 0; i < markers.length; i++) {
+    const start = markers[i].index + `[PAGE ${markers[i].pageNum}]`.length
+    const end = i + 1 < markers.length ? markers[i + 1].index : text.length
+    const pageText = text.slice(start, end).trim()
+    if (pageText.length > 0) {
+      pages.push({ pageNum: markers[i].pageNum, text: pageText })
+    }
+  }
+
+  return pages
+}
+
+/**
  * Extract text chunks with approximate coordinates from a PDF URL.
- * Uses pdf-parse v2 with stopAtErrors:false to recover from structural PDF errors.
- * Requires Node.js 22+ (set via package.json engines) for pdfjs-dist v5 compatibility.
+ * Uses Claude's native PDF reading (no pdf-parse/pdfjs-dist dependency).
  */
 export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   const response = await fetch(pdfUrl)
@@ -30,21 +109,14 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   }
   const buffer = Buffer.from(await response.arrayBuffer())
 
-  const parser = new PDFParse({
-    data: new Uint8Array(buffer),
-    stopAtErrors: false,
-    verbosity: VerbosityLevel.ERRORS,
-    disableFontFace: true,
-    isEvalSupported: false,
-  })
-
-  const result = await parser.getText()
+  const rawText = await extractTextFromPdf(buffer)
+  const pages = parsePages(rawText)
 
   const chunks: PdfChunk[] = []
   let chunkIndex = 0
 
-  for (const page of result.pages) {
-    const pageNum = page.num
+  for (const page of pages) {
+    const pageNum = page.pageNum
     const rawParagraphs = page.text
       .split(/[ \t]{3,}|\n{2,}/)
       .map((p) => p.trim())

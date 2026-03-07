@@ -30,6 +30,8 @@ type ApiResponse = {
   chunksA: ComparedChunk[];
   chunksB: ComparedChunk[];
   comparisonId: string;
+  signedUrlA: string;
+  signedUrlB: string;
 };
 
 function buildViewerChunks(
@@ -224,7 +226,7 @@ export default function ComparePage() {
           <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
             <HighlightedPdfViewer
               ref={viewerARef}
-              pdfUrl={contractA!.file_url}
+              pdfUrl={result.signedUrlA}
               chunks={chunksA}
               label={`Contract A — ${contractA!.name}`}
             />
@@ -234,7 +236,7 @@ export default function ComparePage() {
           <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
             <HighlightedPdfViewer
               ref={viewerBRef}
-              pdfUrl={contractB!.file_url}
+              pdfUrl={result.signedUrlB}
               chunks={chunksB}
               label={`Contract B — ${contractB!.name}`}
             />

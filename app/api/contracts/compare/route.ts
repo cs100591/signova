@@ -158,7 +158,14 @@ Return JSON only:
         })
         .eq('id', record.id)
 
-      return NextResponse.json({ comparison, chunksA, chunksB, comparisonId: record.id })
+      return NextResponse.json({ 
+        comparison, 
+        chunksA, 
+        chunksB, 
+        comparisonId: record.id,
+        signedUrlA,
+        signedUrlB
+      })
     } catch (err) {
       console.error('Compare error:', err)
       await supabase

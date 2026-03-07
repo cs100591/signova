@@ -183,11 +183,6 @@ export async function POST(request: Request) {
   }
 }
 
-// Increase body size limit for file uploads
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '20mb',
-    },
-  },
-};
+// Body size limit: App Router uses `maxBodySize` or handles via runtime.
+// The old Pages Router `config.api.bodyParser` is not supported in App Router.
+export const maxDuration = 60
