@@ -1,5 +1,3 @@
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
-
 export type PdfChunk = {
   id: string
   text: string
@@ -10,110 +8,139 @@ export type PdfChunk = {
   height: number
 }
 
-// Disable worker for server-side extraction to avoid worker file issues
-pdfjs.GlobalWorkerOptions.workerSrc = ''
+const PDF_WIDTH = 612  // standard PDF page width in pts
+const PDF_HEIGHT = 792 // standard PDF page height in pts
+const MARGIN_X = 50
+const MARGIN_Y = 72
 
 /**
- * Extract text chunks with REAL coordinates from a PDF using pdfjs-dist.
+ * Extract text from a PDF using Claude's native PDF vision capability.
+ * Returns text with page markers like [PAGE 1], [PAGE 2], etc.
  */
-export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
-  const chunks: PdfChunk[] = []
-  
-  try {
-    // Fetch PDF
-    const response = await fetch(pdfUrl)
-    if (!response.ok) {
-      throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
-    }
-    
-    const buffer = Buffer.from(await response.arrayBuffer())
-    
-    // Load PDF with pdfjs
-    const loadingTask = pdfjs.getDocument({ data: buffer })
-    const pdf = await loadingTask.promise
-    
-    let chunkIndex = 0
-    
-    // Process each page
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const textContent = await page.getTextContent()
-      
-      // Group text items by line using their y-coordinate
-      const lineMap = new Map<number, TextItem[]>()
-      
-      for (const item of textContent.items) {
-        if ('str' in item && item.str.trim().length > 0) {
-          const textItem = item as TextItem
-          // Get y-coordinate from transform matrix
-          // transform[5] is the y position
-          const y = textItem.transform[5]
-          // Round to nearest integer to group close y-values
-          const yKey = Math.round(y)
-          
-          if (!lineMap.has(yKey)) {
-            lineMap.set(yKey, [])
-          }
-          lineMap.get(yKey)!.push(textItem)
-        }
-      }
-      
-      // Sort lines by y-coordinate (top to bottom)
-      const sortedLines = Array.from(lineMap.entries())
-        .sort((a, b) => b[0] - a[0]) // PDF coordinates: higher y = lower on page
-      
-      // Process each line
-      for (const [y, items] of sortedLines) {
-        // Sort items in line by x-coordinate (left to right)
-        items.sort((a, b) => a.transform[4] - b.transform[4])
-        
-        // Combine text in the same line
-        const lineText = items.map(item => item.str).join(' ').trim()
-        
-        if (lineText.length > 10) {
-          // Calculate bounding box for the entire line
-          const firstItem = items[0]
-          const lastItem = items[items.length - 1]
-          
-          const x = firstItem.transform[4]
-          const yPos = firstItem.transform[5]
-          const width = (lastItem.transform[4] + lastItem.width) - x
-          // Estimate height from font size or use default
-          const height = items[0].height || 12
-          
-          chunks.push({
-            id: `chunk_p${pageNum}_${chunkIndex++}`,
-            text: lineText,
-            page: pageNum,
-            x: x,
-            y: yPos,
-            width: width,
-            height: height,
-          })
-        }
-      }
-      
-      // Clean up
-      page.cleanup()
-    }
-    
-    // Clean up PDF document
-    pdf.destroy()
-    
-  } catch (error) {
-    console.error('[extractPdfChunks] Error:', error)
-    throw error
+async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured')
+
+  const base64PDF = pdfBuffer.toString('base64')
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'pdfs-2024-09-25',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8000,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64PDF,
+              },
+            },
+            {
+              type: 'text',
+              text: 'Extract ALL text from this document. At the start of each page, insert a marker like [PAGE 1], [PAGE 2], etc. Preserve the structure and paragraphs. Return only the extracted text with page markers, nothing else.',
+            },
+          ],
+        },
+      ],
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Claude PDF extraction failed: ${response.status} — ${err.slice(0, 200)}`)
   }
-  
-  return chunks
+
+  const data = await response.json()
+  return data.content?.[0]?.text || ''
 }
 
-interface TextItem {
-  str: string
-  dir: string
-  width: number
-  height: number
-  transform: number[] // [a, b, c, d, e, f] where e=x, f=y
-  fontName: string
-  hasEOL: boolean
+/**
+ * Parse Claude-extracted text (with [PAGE N] markers) into page-level blocks.
+ */
+function parsePages(text: string): { pageNum: number; text: string }[] {
+  const pages: { pageNum: number; text: string }[] = []
+  const pageRegex = /\[PAGE\s+(\d+)\]/gi
+  const markers: { index: number; pageNum: number }[] = []
+
+  let match: RegExpExecArray | null
+  while ((match = pageRegex.exec(text)) !== null) {
+    markers.push({ index: match.index, pageNum: parseInt(match[1], 10) })
+  }
+
+  if (markers.length === 0) {
+    // No page markers found — treat entire text as page 1
+    if (text.trim().length > 0) {
+      pages.push({ pageNum: 1, text: text.trim() })
+    }
+    return pages
+  }
+
+  for (let i = 0; i < markers.length; i++) {
+    const start = markers[i].index + `[PAGE ${markers[i].pageNum}]`.length
+    const end = i + 1 < markers.length ? markers[i + 1].index : text.length
+    const pageText = text.slice(start, end).trim()
+    if (pageText.length > 0) {
+      pages.push({ pageNum: markers[i].pageNum, text: pageText })
+    }
+  }
+
+  return pages
+}
+
+/**
+ * Extract text chunks with approximate coordinates from a PDF URL.
+ * Uses Claude's native PDF reading (no pdf-parse/pdfjs-dist dependency).
+ * 
+ * Note: Coordinates are approximate (estimated) since we use Claude for text extraction
+ * which doesn't provide precise PDF coordinates. For display purposes, this is sufficient.
+ */
+export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
+  const response = await fetch(pdfUrl)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
+  }
+  const buffer = Buffer.from(await response.arrayBuffer())
+
+  const rawText = await extractTextFromPdf(buffer)
+  const pages = parsePages(rawText)
+
+  const chunks: PdfChunk[] = []
+  let chunkIndex = 0
+
+  for (const page of pages) {
+    const pageNum = page.pageNum
+    const rawParagraphs = page.text
+      .split(/[ \t]{3,}|\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 10)
+
+    if (rawParagraphs.length === 0) continue
+
+    const chunkHeight = Math.min((PDF_HEIGHT - MARGIN_Y * 2) / rawParagraphs.length, 60)
+
+    for (let i = 0; i < rawParagraphs.length; i++) {
+      chunks.push({
+        id: `chunk_p${pageNum}_${chunkIndex++}`,
+        text: rawParagraphs[i],
+        page: pageNum,
+        x: MARGIN_X,
+        y: MARGIN_Y + i * chunkHeight,
+        width: PDF_WIDTH - MARGIN_X * 2,
+        height: Math.max(chunkHeight - 4, 12),
+      })
+    }
+  }
+
+  return chunks
 }
