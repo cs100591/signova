@@ -24,14 +24,20 @@ async function loadR2() {
  */
 async function toPresignedUrl(rawUrl: string): Promise<string> {
   try {
+    console.log('[Compare] Processing URL:', rawUrl.substring(0, 100))
     const { getDownloadUrl } = await loadR2()
     const url = new URL(rawUrl)
+    console.log('[Compare] URL pathname:', url.pathname)
     const parts = url.pathname.replace(/^\//, '').split('/')
+    console.log('[Compare] Path parts:', parts)
     parts.shift() // remove bucket name
     const key = parts.join('/')
+    console.log('[Compare] Extracted key:', key)
     const signed = await getDownloadUrl(key, 300) // 5 min expiry
+    console.log('[Compare] Generated presigned URL:', signed ? signed.substring(0, 100) : 'null')
     return signed ?? rawUrl
-  } catch {
+  } catch (err) {
+    console.error('[Compare] toPresignedUrl error:', err)
     return rawUrl
   }
 }
