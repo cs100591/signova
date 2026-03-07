@@ -63,7 +63,8 @@ export async function middleware(request: NextRequest) {
       request.nextUrl.pathname.startsWith('/settings') ||
       request.nextUrl.pathname.startsWith('/extracting') ||
       request.nextUrl.pathname.startsWith('/confirm') ||
-      request.nextUrl.pathname.startsWith('/onboarding')) {
+      request.nextUrl.pathname.startsWith('/onboarding') ||
+      request.nextUrl.pathname.startsWith('/compare')) {
     
     if (!session) {
       // Redirect to login if not authenticated
@@ -89,6 +90,7 @@ export const config = {
     '/extracting/:path*',
     '/confirm/:path*',
     '/onboarding/:path*',
+    '/compare',
     '/login',
   ],
 };
