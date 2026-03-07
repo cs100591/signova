@@ -42,7 +42,13 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
     return text
   }
 
-  await pdfParse(buffer, { pagerender: renderPage })
+  try {
+    await pdfParse(buffer, { pagerender: renderPage })
+  } catch (err) {
+    // pdfjs v2 throws non-fatal parse errors (e.g. "Command token too long") on some PDFs.
+    // If the pagerender callback already captured pages, proceed with what we have.
+    if (pageTexts.length === 0) throw err
+  }
 
   const chunks: PdfChunk[] = []
   let chunkIndex = 0
