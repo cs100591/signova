@@ -15,6 +15,8 @@ export type ComparedChunk = {
   y: number;
   width: number;
   height: number;
+  pageWidth?: number;
+  pageHeight?: number;
   riskLevel?: "high" | "medium" | "low" | "none";
   riskChange?: "increased" | "decreased" | "same" | "new" | "removed";
   changeType?: "modified" | "added" | "removed" | "unchanged";
@@ -65,35 +67,41 @@ function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
     colors: filtered.map(c => ({ id: c.id, color: getHighlightColor(c) }))
   });
 
-  const highlights = filtered.map((chunk) => ({
-    id: chunk.id,
-    content: { text: chunk.text },
-    comment: { text: chunk.summary || chunk.topic || "", emoji: "" },
-    position: {
-      boundingRect: {
-        // PDF coordinates in points - scaledToViewport will convert to viewport pixels
-        x1: chunk.x,
-        y1: chunk.y,
-        x2: chunk.x + chunk.width,
-        y2: chunk.y + chunk.height,
-        width: 612, // standard PDF width in pts
-        height: 792, // standard PDF height in pts
-        pageNumber: chunk.page,
-      },
-      rects: [
-        {
+  const highlights = filtered.map((chunk) => {
+    // Use actual PDF page dimensions if available, fallback to US Letter (612x792)
+    const pageW = chunk.pageWidth ?? 612;
+    const pageH = chunk.pageHeight ?? 792;
+    
+    return {
+      id: chunk.id,
+      content: { text: chunk.text },
+      comment: { text: chunk.summary || chunk.topic || "", emoji: "" },
+      position: {
+        boundingRect: {
+          // PDF coordinates in points - scaledToViewport will convert to viewport pixels
           x1: chunk.x,
           y1: chunk.y,
           x2: chunk.x + chunk.width,
           y2: chunk.y + chunk.height,
-          width: 612,
-          height: 792,
+          width: pageW,
+          height: pageH,
           pageNumber: chunk.page,
         },
-      ],
-      pageNumber: chunk.page,
-    },
-  }));
+        rects: [
+          {
+            x1: chunk.x,
+            y1: chunk.y,
+            x2: chunk.x + chunk.width,
+            y2: chunk.y + chunk.height,
+            width: pageW,
+            height: pageH,
+            pageNumber: chunk.page,
+          },
+        ],
+        pageNumber: chunk.page,
+      },
+    };
+  });
 
   console.log("[chunksToHighlights] Output highlights:", highlights.length);
   return highlights;

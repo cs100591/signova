@@ -1,3 +1,6 @@
+import { createRequire } from 'module'
+import type { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
+
 export type PdfChunk = {
   id: string
   text: string
@@ -6,141 +9,139 @@ export type PdfChunk = {
   y: number
   width: number
   height: number
+  pageWidth: number
+  pageHeight: number
 }
 
-const PDF_WIDTH = 612  // standard PDF page width in pts
-const PDF_HEIGHT = 792 // standard PDF page height in pts
-const MARGIN_X = 50
-const MARGIN_Y = 72
+interface TextItem {
+  str: string
+  dir: string
+  width: number
+  height: number
+  transform: number[] // [a, b, c, d, e, f] where e=x, f=y (baseline from bottom)
+  fontName: string
+  hasEOL: boolean
+}
 
-/**
- * Extract text from a PDF using Claude's native PDF vision capability.
- * Returns text with page markers like [PAGE 1], [PAGE 2], etc.
- */
-async function extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured')
+// Dynamically import pdfjs-dist to avoid module loading issues at build time
+async function loadPdfJs() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  return pdfjs
+}
 
-  const base64PDF = pdfBuffer.toString('base64')
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'pdfs-2024-09-25',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 8000,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: base64PDF,
-              },
-            },
-            {
-              type: 'text',
-              text: 'Extract ALL text from this document. At the start of each page, insert a marker like [PAGE 1], [PAGE 2], etc. Preserve the structure and paragraphs. Return only the extracted text with page markers, nothing else.',
-            },
-          ],
-        },
-      ],
-    }),
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`Claude PDF extraction failed: ${response.status} — ${err.slice(0, 200)}`)
-  }
-
-  const data = await response.json()
-  return data.content?.[0]?.text || ''
+// Get worker path at runtime (only runs in Node.js server context)
+function getWorkerSrc(): string {
+  const require = createRequire(import.meta.url)
+  const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
+  return new URL('file://' + workerPath).href
 }
 
 /**
- * Parse Claude-extracted text (with [PAGE N] markers) into page-level blocks.
- */
-function parsePages(text: string): { pageNum: number; text: string }[] {
-  const pages: { pageNum: number; text: string }[] = []
-  const pageRegex = /\[PAGE\s+(\d+)\]/gi
-  const markers: { index: number; pageNum: number }[] = []
-
-  let match: RegExpExecArray | null
-  while ((match = pageRegex.exec(text)) !== null) {
-    markers.push({ index: match.index, pageNum: parseInt(match[1], 10) })
-  }
-
-  if (markers.length === 0) {
-    // No page markers found — treat entire text as page 1
-    if (text.trim().length > 0) {
-      pages.push({ pageNum: 1, text: text.trim() })
-    }
-    return pages
-  }
-
-  for (let i = 0; i < markers.length; i++) {
-    const start = markers[i].index + `[PAGE ${markers[i].pageNum}]`.length
-    const end = i + 1 < markers.length ? markers[i + 1].index : text.length
-    const pageText = text.slice(start, end).trim()
-    if (pageText.length > 0) {
-      pages.push({ pageNum: markers[i].pageNum, text: pageText })
-    }
-  }
-
-  return pages
-}
-
-/**
- * Extract text chunks with approximate coordinates from a PDF URL.
- * Uses Claude's native PDF reading (no pdf-parse/pdfjs-dist dependency).
+ * Extract text chunks with REAL coordinates from a PDF using pdfjs-dist.
  * 
- * Note: Coordinates are approximate (estimated) since we use Claude for text extraction
- * which doesn't provide precise PDF coordinates. For display purposes, this is sufficient.
+ * Uses the legacy build which is compatible with Node.js server environments.
+ * Coordinates are extracted from the actual PDF text positions and flipped
+ * from PDF coordinate system (y from bottom) to viewport coordinates (y from top).
+ * 
+ * Each line of text becomes one chunk, which matches the granularity that
+ * AI uses when identifying contract clauses.
  */
 export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
-  const response = await fetch(pdfUrl)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
-  }
-  const buffer = Buffer.from(await response.arrayBuffer())
-
-  const rawText = await extractTextFromPdf(buffer)
-  const pages = parsePages(rawText)
-
   const chunks: PdfChunk[] = []
-  let chunkIndex = 0
-
-  for (const page of pages) {
-    const pageNum = page.pageNum
-    const rawParagraphs = page.text
-      .split(/[ \t]{3,}|\n{2,}/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 10)
-
-    if (rawParagraphs.length === 0) continue
-
-    const chunkHeight = Math.min((PDF_HEIGHT - MARGIN_Y * 2) / rawParagraphs.length, 60)
-
-    for (let i = 0; i < rawParagraphs.length; i++) {
-      chunks.push({
-        id: `chunk_p${pageNum}_${chunkIndex++}`,
-        text: rawParagraphs[i],
-        page: pageNum,
-        x: MARGIN_X,
-        y: MARGIN_Y + i * chunkHeight,
-        width: PDF_WIDTH - MARGIN_X * 2,
-        height: Math.max(chunkHeight - 4, 12),
-      })
+  
+  try {
+    // Load pdfjs-dist dynamically
+    const pdfjs = await loadPdfJs()
+    const { getDocument, GlobalWorkerOptions } = pdfjs
+    
+    // Set worker source to the legacy worker file (file:// URL for Node.js)
+    GlobalWorkerOptions.workerSrc = getWorkerSrc()
+    
+    // Fetch PDF
+    const response = await fetch(pdfUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`)
     }
+    
+    const buffer = Buffer.from(await response.arrayBuffer())
+    
+    // Load PDF with pdfjs
+    const pdf = await getDocument({ 
+      data: buffer,
+      verbosity: 0,
+    }).promise
+    
+    let chunkIndex = 0
+    
+    // Process each page
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
+      const viewport = page.getViewport({ scale: 1.0 })
+      const pageWidth = viewport.width
+      const pageHeight = viewport.height
+      
+      // Group text items by line using their y-coordinate (PDF: y from bottom)
+      const lineMap = new Map<number, TextItem[]>()
+      
+      for (const item of textContent.items) {
+        if ('str' in item && item.str.trim().length > 0) {
+          const textItem = item as TextItem
+          const yKey = Math.round(textItem.transform[5])
+          
+          if (!lineMap.has(yKey)) {
+            lineMap.set(yKey, [])
+          }
+          lineMap.get(yKey)!.push(textItem)
+        }
+      }
+      
+      // Sort lines top to bottom (PDF: larger y = higher on page)
+      const sortedLines = Array.from(lineMap.entries()).sort((a, b) => b[0] - a[0])
+      
+      // Create one chunk per line
+      for (const [yPdf, items] of sortedLines) {
+        // Sort items in line left to right
+        items.sort((a, b) => a.transform[4] - b.transform[4])
+        
+        const text = items.map(item => item.str).join(' ').trim()
+        if (text.length <= 5) continue
+        
+        const firstItem = items[0]
+        const lastItem = items[items.length - 1]
+        const lineHeight = Math.max(...items.map(item => item.height || 12))
+        
+        const x = firstItem.transform[4]
+        const width = (lastItem.transform[4] + lastItem.width) - x
+        
+        // Coordinate conversion:
+        // PDF: y increases from bottom, transform[5] is baseline position
+        // Viewport: y increases from top, we want top of text box
+        // So: y_top = pageHeight - (baseline + height)
+        const yTop = pageHeight - (yPdf + lineHeight)
+        
+        chunks.push({
+          id: `chunk_p${pageNum}_${chunkIndex++}`,
+          text,
+          page: pageNum,
+          x,
+          y: yTop,
+          width,
+          height: lineHeight,
+          pageWidth,
+          pageHeight,
+        })
+      }
+      
+      page.cleanup()
+    }
+    
+    pdf.destroy()
+    
+  } catch (error) {
+    console.error('[extractPdfChunks] Error:', error)
+    throw error
   }
-
+  
   return chunks
 }
