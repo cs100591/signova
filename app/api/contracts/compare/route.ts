@@ -3,6 +3,24 @@ import { anthropic } from '@ai-sdk/anthropic'
 import { generateText } from 'ai'
 import { createSupabaseServerClient } from '@/lib/supabase'
 import { extractPdfChunks, PdfChunk } from '@/lib/pdf/extractWithPositions'
+import { getDownloadUrl } from '@/lib/r2'
+
+/**
+ * Convert a raw R2 storage URL to a presigned URL for server-side access.
+ * R2 URLs are not publicly accessible — we need presigned URLs.
+ */
+async function toPresignedUrl(rawUrl: string): Promise<string> {
+  try {
+    const url = new URL(rawUrl)
+    const parts = url.pathname.replace(/^\//, '').split('/')
+    parts.shift() // remove bucket name
+    const key = parts.join('/')
+    const signed = await getDownloadUrl(key, 300) // 5 min expiry
+    return signed ?? rawUrl
+  } catch {
+    return rawUrl
+  }
+}
 
 export const maxDuration = 60
 
@@ -43,10 +61,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Convert raw R2 URLs to presigned URLs (R2 requires auth for access)
+    const [signedUrlA, signedUrlB] = await Promise.all([
+      toPresignedUrl(contractAUrl),
+      toPresignedUrl(contractBUrl),
+    ])
+
     // Extract chunks from both PDFs in parallel
     const [chunksA, chunksB] = await Promise.all([
-      extractPdfChunks(contractAUrl),
-      extractPdfChunks(contractBUrl),
+      extractPdfChunks(signedUrlA),
+      extractPdfChunks(signedUrlB),
     ])
 
     // Limit chunks sent to Claude to avoid token overflow
