@@ -1,3 +1,125 @@
+// DOMMatrix polyfill for Node.js (required by pdfjs-dist)
+// Node.js 22 does not include DOMMatrix, and @napi-rs/canvas (pdfjs's fallback)
+// is not available on Vercel. This pure-JS polyfill covers what pdfjs needs.
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  globalThis.DOMMatrix = class DOMMatrix {
+    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0
+    m11 = 1; m12 = 0; m13 = 0; m14 = 0
+    m21 = 0; m22 = 1; m23 = 0; m24 = 0
+    m31 = 0; m32 = 0; m33 = 1; m34 = 0
+    m41 = 0; m42 = 0; m43 = 0; m44 = 1
+    is2D = true
+    isIdentity = true
+    
+    constructor(init?: string | number[]) {
+      if (typeof init === 'string') {
+        // Parse matrix string
+        const m = init.match(/matrix\(([^)]+)\)/)
+        if (m) {
+          const vals = m[1].split(/,\s*/).map(Number)
+          this._setFromArray(vals.length >= 6 ? vals : [1, 0, 0, 1, 0, 0])
+        }
+      } else if (Array.isArray(init)) {
+        if (init.length === 6) {
+          this._setFromArray(init)
+        } else if (init.length === 16) {
+          this.a = init[0]; this.b = init[1]; this.c = init[4]; this.d = init[5]
+          this.e = init[12]; this.f = init[13]
+          this.m11 = init[0]; this.m12 = init[1]; this.m13 = init[2]; this.m14 = init[3]
+          this.m21 = init[4]; this.m22 = init[5]; this.m23 = init[6]; this.m24 = init[7]
+          this.m31 = init[8]; this.m32 = init[9]; this.m33 = init[10]; this.m34 = init[11]
+          this.m41 = init[12]; this.m42 = init[13]; this.m43 = init[14]; this.m44 = init[15]
+          this._update2D()
+        }
+      }
+    }
+    
+    _setFromArray(vals: number[]) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = vals
+      this.m11 = this.a; this.m12 = this.b; this.m21 = this.c; this.m22 = this.d
+      this.m41 = this.e; this.m42 = this.f
+      this._update2D()
+    }
+    
+    _update2D() {
+      this.is2D = this.m13 === 0 && this.m14 === 0 && this.m23 === 0 && this.m24 === 0 &&
+                  this.m31 === 0 && this.m32 === 0 && this.m33 === 1 && this.m34 === 0 &&
+                  this.m43 === 0 && this.m44 === 1
+      this.isIdentity = this.a === 1 && this.b === 0 && this.c === 0 && this.d === 1 &&
+                        this.e === 0 && this.f === 0
+    }
+    
+    multiply(other: DOMMatrix) {
+      return new DOMMatrix([
+        this.a * other.a + this.c * other.b,
+        this.b * other.a + this.d * other.b,
+        this.a * other.c + this.c * other.d,
+        this.b * other.c + this.d * other.d,
+        this.a * other.e + this.c * other.f + this.e,
+        this.b * other.e + this.d * other.f + this.f
+      ])
+    }
+    
+    preMultiplySelf(other: DOMMatrix) {
+      const result = other.multiply(this)
+      Object.assign(this, result)
+      return this
+    }
+    
+    multiplySelf(other: DOMMatrix) {
+      const result = this.multiply(other)
+      Object.assign(this, result)
+      return this
+    }
+    
+    invertSelf() {
+      const det = this.a * this.d - this.b * this.c
+      if (det === 0) return this
+      const vals = [
+        this.d / det,
+        -this.b / det,
+        -this.c / det,
+        this.a / det,
+        (this.c * this.f - this.d * this.e) / det,
+        (this.b * this.e - this.a * this.f) / det
+      ]
+      this._setFromArray(vals)
+      return this
+    }
+    
+    inverse() {
+      return new DOMMatrix([this.a, this.b, this.c, this.d, this.e, this.f]).invertSelf()
+    }
+    
+    translate(tx = 0, ty = 0, tz = 0) {
+      return new DOMMatrix([
+        this.a, this.b, this.c, this.d,
+        this.a * tx + this.c * ty + this.e,
+        this.b * tx + this.d * ty + this.f
+      ])
+    }
+    
+    scale(scaleX = 1, scaleY = scaleX) {
+      return new DOMMatrix([
+        this.a * scaleX, this.b * scaleX,
+        this.c * scaleY, this.d * scaleY,
+        this.e, this.f
+      ])
+    }
+    
+    transformPoint(point: { x: number; y: number }) {
+      return {
+        x: this.a * point.x + this.c * point.y + this.e,
+        y: this.b * point.x + this.d * point.y + this.f
+      }
+    }
+    
+    toString() {
+      return `matrix(${this.a}, ${this.b}, ${this.c}, ${this.d}, ${this.e}, ${this.f})`
+    }
+  } as any
+}
+
 import { createRequire } from 'module'
 import type { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
 
