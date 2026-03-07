@@ -1,6 +1,20 @@
-// pdf-parse-fork is a CommonJS fork that bundles pdfjs v2.x — no browser APIs required
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse-fork')
+import { PDFParse, VerbosityLevel } from 'pdf-parse'
+
+// Polyfill Uint8Array.prototype.toHex for Node.js < 22 (required by pdfjs-dist v5)
+if (!(Uint8Array.prototype as unknown as Record<string, unknown>).toHex) {
+  Object.defineProperty(Uint8Array.prototype, 'toHex', {
+    value: function (): string {
+      return Array.from(this as Uint8Array)
+        .map((b: number) => b.toString(16).padStart(2, '0'))
+        .join('')
+    },
+    writable: true,
+    configurable: true,
+  })
+}
+
+// Disable web worker — use same-thread parsing (required for Node.js / Vercel)
+PDFParse.setWorker('')
 
 export type PdfChunk = {
   id: string
@@ -19,8 +33,8 @@ const MARGIN_Y = 72
 
 /**
  * Extract text chunks with approximate coordinates from a PDF URL.
- * Uses pdf-parse (pure Node.js, no browser APIs) for reliable Vercel compatibility.
- * Coordinates are approximate — based on text position within the page.
+ * Uses pdf-parse v2 with stopAtErrors:false — recovers from bad XRef tables and other
+ * structural PDF errors that crash older parsers (e.g. "bad XRef entry").
  */
 export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   const response = await fetch(pdfUrl)
@@ -29,36 +43,26 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   }
   const buffer = Buffer.from(await response.arrayBuffer())
 
-  const pageTexts: string[] = []
+  const parser = new PDFParse({
+    data: new Uint8Array(buffer),
+    stopAtErrors: false,      // recover from bad XRef / structural errors
+    verbosity: VerbosityLevel.ERRORS, // suppress noise
+    disableFontFace: true,    // not rendering — skip font loading
+    isEvalSupported: false,   // safer in Node.js
+  })
 
-  // Custom page renderer captures text per page
-  const renderPage = async (pageData: { getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }) => {
-    const content = await pageData.getTextContent()
-    const text = content.items
-      .filter((item) => typeof item.str === 'string' && item.str.trim().length > 0)
-      .map((item) => item.str)
-      .join(' ')
-    pageTexts.push(text)
-    return text
-  }
-
-  try {
-    await pdfParse(buffer, { pagerender: renderPage })
-  } catch (err) {
-    // pdfjs v2 throws non-fatal parse errors (e.g. "Command token too long") on some PDFs.
-    // If the pagerender callback already captured pages, proceed with what we have.
-    if (pageTexts.length === 0) throw err
-  }
+  const result = await parser.getText()
 
   const chunks: PdfChunk[] = []
   let chunkIndex = 0
 
-  for (let pageIdx = 0; pageIdx < pageTexts.length; pageIdx++) {
-    const pageNum = pageIdx + 1
-    const pageText = pageTexts[pageIdx]
+  for (const page of result.pages) {
+    const pageNum = page.num
+    const rawParagraphs = page.text
+      .split(/[ \t]{3,}|\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 10)
 
-    // Split into paragraph-like chunks on 3+ whitespace characters
-    const rawParagraphs = pageText.split(/[ \t]{3,}|\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 10)
     if (rawParagraphs.length === 0) continue
 
     const chunkHeight = Math.min((PDF_HEIGHT - MARGIN_Y * 2) / rawParagraphs.length, 60)
