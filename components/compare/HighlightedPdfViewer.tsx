@@ -4,6 +4,7 @@ import { useRef, forwardRef, useImperativeHandle } from "react";
 import { PdfHighlighter, PdfLoader, Highlight } from "react-pdf-highlighter";
 import type { IHighlight } from "react-pdf-highlighter";
 import type { T_ViewportHighlight } from "react-pdf-highlighter/dist/components/PdfHighlighter";
+import { AlertTriangle } from "lucide-react";
 
 export type ComparedChunk = {
   id: string;
@@ -94,7 +95,7 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
           </div>
         )}
         <div className="flex-1 relative overflow-hidden">
-          <PdfLoader url={pdfUrl} beforeLoad={<PdfLoadingSpinner />}>
+          <PdfLoader url={pdfUrl} beforeLoad={<PdfLoadingSpinner />} errorMessage={<PdfErrorDisplay />}>
             {(pdfDocument) => (
               <PdfHighlighter
                 pdfDocument={pdfDocument}
@@ -141,6 +142,20 @@ function PdfLoadingSpinner() {
       <div className="flex flex-col items-center gap-2">
         <div className="w-6 h-6 border-2 border-[#c8873a] border-t-transparent rounded-full animate-spin" />
         Loading PDF…
+      </div>
+    </div>
+  );
+}
+
+function PdfErrorDisplay() {
+  return (
+    <div className="flex items-center justify-center h-full min-h-[400px] text-red-600 text-sm">
+      <div className="flex flex-col items-center gap-2 text-center px-4">
+        <AlertTriangle className="w-8 h-8" />
+        <p className="font-medium">Failed to load PDF</p>
+        <p className="text-xs text-red-500 max-w-xs">
+          Unable to load the document. Please try again or contact support if the problem persists.
+        </p>
       </div>
     </div>
   );

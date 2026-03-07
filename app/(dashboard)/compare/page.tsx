@@ -226,7 +226,7 @@ export default function ComparePage() {
           <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
             <HighlightedPdfViewer
               ref={viewerARef}
-              pdfUrl={result.signedUrlA}
+              pdfUrl={`/api/pdf-proxy?url=${encodeURIComponent(result.signedUrlA)}`}
               chunks={chunksA}
               label={`Contract A — ${contractA!.name}`}
             />
@@ -236,7 +236,7 @@ export default function ComparePage() {
           <div className="min-h-0 overflow-hidden border-r border-[#e0d9ce]">
             <HighlightedPdfViewer
               ref={viewerBRef}
-              pdfUrl={result.signedUrlB}
+              pdfUrl={`/api/pdf-proxy?url=${encodeURIComponent(result.signedUrlB)}`}
               chunks={chunksB}
               label={`Contract B — ${contractB!.name}`}
             />
