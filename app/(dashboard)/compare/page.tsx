@@ -59,8 +59,8 @@ function buildViewerChunks(
   });
 
   // Second pass: expand to nearby chunks (same section/topic)
-  // Find chunks that are close to matched chunks (within same page and nearby Y position)
-  const expandedChunks = new Set<string>();
+  // Collect all expansions first, then add to map (avoid modifying during iteration)
+  const expansions: { chunkId: string; match: ComparisonMatch; matchIndex: number }[] = [];
   
   chunkToMatchMap.forEach((data, matchedChunkId) => {
     if (!data.isPrimary) return; // Only expand from primary chunks
@@ -86,14 +86,24 @@ function buildViewerChunks(
       const threshold = isTitle ? 200 : 100;
       
       if (yDiff > 0 && yDiff < threshold) {
-        expandedChunks.add(nearbyChunk.id);
-        chunkToMatchMap.set(nearbyChunk.id, { 
-          match: data.match, 
-          matchIndex: data.matchIndex,
-          isPrimary: false // Expanded chunks don't show badge
+        expansions.push({
+          chunkId: nearbyChunk.id,
+          match: data.match,
+          matchIndex: data.matchIndex
         });
       }
     });
+  });
+  
+  // Add expansions to map (after iteration is complete)
+  expansions.forEach(({ chunkId, match, matchIndex }) => {
+    if (!chunkToMatchMap.has(chunkId)) {
+      chunkToMatchMap.set(chunkId, { 
+        match, 
+        matchIndex,
+        isPrimary: false // Expanded chunks don't show badge
+      });
+    }
   });
 
   // Build the final result
@@ -119,7 +129,7 @@ function buildViewerChunks(
     totalChunks: result.length,
     enhancedWithRiskInfo: enhancedCount,
     primaryChunks: primaryCount,
-    expandedChunks: expandedChunks.size,
+    expandedChunks: expansions.length,
     sampleEnhanced: result.filter(c => c.matchIndex).slice(0, 3).map(c => ({ 
       id: c.id, 
       matchIndex: c.matchIndex,
