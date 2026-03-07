@@ -65,33 +65,29 @@ function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
     colors: filtered.map(c => ({ id: c.id, color: getHighlightColor(c) }))
   });
 
-  // PDF dimensions in points
-  const PDF_WIDTH = 612
-  const PDF_HEIGHT = 792
-
   const highlights = filtered.map((chunk) => ({
     id: chunk.id,
     content: { text: chunk.text },
     comment: { text: chunk.summary || chunk.topic || "", emoji: "" },
     position: {
       boundingRect: {
-        // Convert pt to percentage for react-pdf-highlighter
-        x1: (chunk.x / PDF_WIDTH) * 100,
-        y1: (chunk.y / PDF_HEIGHT) * 100,
-        x2: ((chunk.x + chunk.width) / PDF_WIDTH) * 100,
-        y2: ((chunk.y + chunk.height) / PDF_HEIGHT) * 100,
-        width: 100, // percentage
-        height: 100, // percentage
+        // PDF coordinates in points - scaledToViewport will convert to viewport pixels
+        x1: chunk.x,
+        y1: chunk.y,
+        x2: chunk.x + chunk.width,
+        y2: chunk.y + chunk.height,
+        width: 612, // standard PDF width in pts
+        height: 792, // standard PDF height in pts
         pageNumber: chunk.page,
       },
       rects: [
         {
-          x1: (chunk.x / PDF_WIDTH) * 100,
-          y1: (chunk.y / PDF_HEIGHT) * 100,
-          x2: ((chunk.x + chunk.width) / PDF_WIDTH) * 100,
-          y2: ((chunk.y + chunk.height) / PDF_HEIGHT) * 100,
-          width: 100,
-          height: 100,
+          x1: chunk.x,
+          y1: chunk.y,
+          x2: chunk.x + chunk.width,
+          y2: chunk.y + chunk.height,
+          width: 612,
+          height: 792,
           pageNumber: chunk.page,
         },
       ],
@@ -229,10 +225,10 @@ function ColoredHighlight({
           onMouseOut={onMouseOut}
           style={{
             position: "absolute",
-            left: `${rect.left}%`,
-            top: `${rect.top}%`,
-            width: `${rect.width}%`,
-            height: `${rect.height}%`,
+            left: `${rect.left}px`,
+            top: `${rect.top}px`,
+            width: `${rect.width}px`,
+            height: `${rect.height}px`,
             background: color,
             opacity: 0.35,
             cursor: "pointer",
