@@ -1,5 +1,12 @@
 import type { TextItem as PdfjsTextItem } from 'pdfjs-dist/types/src/display/api'
 
+// Polyfill DOMMatrix for Node.js (required by pdfjs-dist in server environment)
+if (typeof globalThis.DOMMatrix === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { DOMMatrix } = require('canvas')
+  globalThis.DOMMatrix = DOMMatrix
+}
+
 async function getPdfjs() {
   const pdfjsLib = await import('pdfjs-dist')
   // Disable worker for server-side (Node.js) usage
