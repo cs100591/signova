@@ -1,4 +1,4 @@
-import * as pdfjs from 'pdfjs-dist'
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 export type PdfChunk = {
   id: string
@@ -10,11 +10,8 @@ export type PdfChunk = {
   height: number
 }
 
-// Initialize pdfjs worker
-if (typeof window !== 'undefined') {
-  // Client-side: use the bundled worker
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`
-}
+// Disable worker for server-side extraction to avoid worker file issues
+pdfjs.GlobalWorkerOptions.workerSrc = ''
 
 /**
  * Extract text chunks with REAL coordinates from a PDF using pdfjs-dist.
