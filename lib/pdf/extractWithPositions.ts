@@ -148,14 +148,11 @@ interface TextItem {
 // Dynamically import pdfjs-dist to avoid module loading issues at build time
 async function loadPdfJs() {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  // Use unpkg CDN for worker — avoids file:// URL issues on Vercel Linux
+  // Note: worker is loaded from CDN, not local file system
+  const version = (pdfjs as any).version || '5.4.624'
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${version}/legacy/build/pdf.worker.mjs`
   return pdfjs
-}
-
-// Get worker path at runtime (only runs in Node.js server context)
-function getWorkerSrc(): string {
-  const require = createRequire(import.meta.url)
-  const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs')
-  return new URL('file://' + workerPath).href
 }
 
 /**
@@ -172,12 +169,9 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
   const chunks: PdfChunk[] = []
   
   try {
-    // Load pdfjs-dist dynamically
+    // Load pdfjs-dist dynamically (workerSrc is set inside loadPdfJs)
     const pdfjs = await loadPdfJs()
-    const { getDocument, GlobalWorkerOptions } = pdfjs
-    
-    // Set worker source to the legacy worker file (file:// URL for Node.js)
-    GlobalWorkerOptions.workerSrc = getWorkerSrc()
+    const { getDocument } = pdfjs
     
     // Fetch PDF
     const response = await fetch(pdfUrl)
