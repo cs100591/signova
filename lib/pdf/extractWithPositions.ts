@@ -9,6 +9,20 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
   globalThis.DOMMatrix = DOMMatrix
 }
 
+// Polyfill Uint8Array.prototype.toHex — added in Node.js 22+, required by pdfjs-dist v5
+// Vercel serverless may run Node.js 18/20 which lack this method
+if (!Uint8Array.prototype.toHex) {
+  Object.defineProperty(Uint8Array.prototype, 'toHex', {
+    value: function (): string {
+      return Array.from(this as Uint8Array)
+        .map((b: number) => b.toString(16).padStart(2, '0'))
+        .join('')
+    },
+    writable: true,
+    configurable: true,
+  })
+}
+
 let _workerSrc: string | null = null
 
 function getWorkerSrc(): string {
