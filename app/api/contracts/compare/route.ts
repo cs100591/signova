@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase'
+import { randomUUID } from 'crypto'
 
 // Dynamic imports to handle potential module loading issues
 async function loadAI() {
@@ -18,43 +19,234 @@ async function loadR2() {
   return { getDownloadUrl }
 }
 
+// Generate unique request ID for tracing
+function generateRequestId(): string {
+  return `cmp_${Date.now()}_${randomUUID().slice(0, 8)}`
+}
+
+// Logging helper with request ID
+function log(requestId: string, level: 'info' | 'warn' | 'error', message: string, data?: any) {
+  const timestamp = new Date().toISOString()
+  const prefix = `[${timestamp}] [${requestId}] [Compare]`
+  const logData = data ? ` ${JSON.stringify(data)}` : ''
+  
+  if (level === 'error') {
+    console.error(`${prefix} [ERROR] ${message}${logData}`)
+  } else if (level === 'warn') {
+    console.warn(`${prefix} [WARN] ${message}${logData}`)
+  } else {
+    console.log(`${prefix} [INFO] ${message}${logData}`)
+  }
+}
+
+// Performance timing helper
+function startTimer() {
+  return process.hrtime.bigint()
+}
+
+function getElapsedMs(start: bigint): number {
+  return Number(process.hrtime.bigint() - start) / 1000000
+}
+
 /**
  * Convert a raw R2 storage URL to a presigned URL for server-side access.
  * R2 URLs are not publicly accessible — we need presigned URLs.
  */
-async function toPresignedUrl(rawUrl: string): Promise<string> {
+async function toPresignedUrl(rawUrl: string, requestId: string): Promise<string> {
+  const timer = startTimer()
   try {
-    console.log('[Compare] Processing URL:', rawUrl.substring(0, 100))
+    log(requestId, 'info', 'Processing URL', { url: rawUrl.substring(0, 100) })
+    
     const { getDownloadUrl } = await loadR2()
     const url = new URL(rawUrl)
-    console.log('[Compare] URL pathname:', url.pathname)
     const parts = url.pathname.replace(/^\//, '').split('/')
-    console.log('[Compare] Path parts:', parts)
     parts.shift() // remove bucket name
     const key = parts.join('/')
-    console.log('[Compare] Extracted key:', key)
+    
+    log(requestId, 'info', 'Extracted key', { key, parts })
+    
     const signed = await getDownloadUrl(key, 300) // 5 min expiry
-    console.log('[Compare] Generated presigned URL:', signed ? signed.substring(0, 100) : 'null')
+    const elapsed = getElapsedMs(timer)
+    
+    log(requestId, 'info', 'Generated presigned URL', { 
+      elapsedMs: elapsed,
+      signed: signed ? signed.substring(0, 100) : 'null' 
+    })
+    
     return signed ?? rawUrl
   } catch (err) {
-    console.error('[Compare] toPresignedUrl error:', err)
+    const elapsed = getElapsedMs(timer)
+    log(requestId, 'error', 'toPresignedUrl failed', { 
+      elapsedMs: elapsed,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined
+    })
     return rawUrl
+  }
+}
+
+/**
+ * Fetch PDF with detailed logging and timeout
+ */
+async function fetchPdf(url: string, requestId: string, label: string): Promise<Buffer> {
+  const timer = startTimer()
+  log(requestId, 'info', `Fetching PDF ${label}`, { url: url.substring(0, 100) })
+  
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
+    
+    const response = await fetch(url, { 
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/pdf,*/*'
+      }
+    })
+    clearTimeout(timeoutId)
+    
+    const elapsed = getElapsedMs(timer)
+    
+    if (!response.ok) {
+      log(requestId, 'error', `PDF fetch failed ${label}`, {
+        status: response.status,
+        statusText: response.statusText,
+        elapsedMs: elapsed
+      })
+      throw new Error(`Failed to fetch PDF ${label}: HTTP ${response.status} ${response.statusText}`)
+    }
+    
+    const buffer = Buffer.from(await response.arrayBuffer())
+    
+    log(requestId, 'info', `PDF fetched successfully ${label}`, {
+      size: buffer.length,
+      contentType: response.headers.get('content-type'),
+      elapsedMs: elapsed
+    })
+    
+    return buffer
+  } catch (err) {
+    const elapsed = getElapsedMs(timer)
+    
+    if (err instanceof Error && err.name === 'AbortError') {
+      log(requestId, 'error', `PDF fetch timeout ${label}`, { elapsedMs: elapsed })
+      throw new Error(`Timeout fetching PDF ${label} after 30 seconds`)
+    }
+    
+    log(requestId, 'error', `PDF fetch error ${label}`, {
+      error: err instanceof Error ? err.message : String(err),
+      elapsedMs: elapsed
+    })
+    throw err
+  }
+}
+
+/**
+ * Extract chunks from PDF or fallback to extracted_text from database
+ */
+async function extractChunksWithFallback(
+  pdfUrl: string, 
+  contractId: string | null,
+  requestId: string,
+  supabase: any
+): Promise<any[]> {
+  const timer = startTimer()
+  
+  // Try 1: Extract from PDF URL
+  try {
+    log(requestId, 'info', 'Attempting PDF extraction', { contractId })
+    const { extractPdfChunks } = await loadPDF()
+    const chunks = await extractPdfChunks(pdfUrl)
+    
+    const elapsed = getElapsedMs(timer)
+    log(requestId, 'info', 'PDF extraction successful', {
+      contractId,
+      chunks: chunks.length,
+      elapsedMs: elapsed
+    })
+    
+    return chunks
+  } catch (pdfError) {
+    const elapsed = getElapsedMs(timer)
+    log(requestId, 'warn', 'PDF extraction failed, trying fallback', {
+      contractId,
+      error: pdfError instanceof Error ? pdfError.message : String(pdfError),
+      elapsedMs: elapsed
+    })
+    
+    // Try 2: Fallback to database extracted_text
+    if (contractId) {
+      try {
+        log(requestId, 'info', 'Fetching extracted_text from database', { contractId })
+        
+        const { data: contract, error } = await supabase
+          .from('contracts')
+          .select('extracted_text, contract_name')
+          .eq('id', contractId)
+          .single()
+        
+        if (error) {
+          log(requestId, 'error', 'Database fetch error', { contractId, error: error.message })
+        } else if (contract?.extracted_text) {
+          // Convert extracted_text to chunks format
+          const lines = contract.extracted_text.split('\n').filter((line: string) => line.trim().length > 5)
+          const chunks = lines.map((line: string, index: number) => ({
+            id: `chunk_fallback_${index}`,
+            text: line.trim(),
+            page: 1, // We don't know the page without PDF parsing
+            x: 50,
+            y: index * 14,
+            width: Math.min(line.length * 6, 512),
+            height: 14,
+            pageWidth: 612,
+            pageHeight: 792,
+          }))
+          
+          log(requestId, 'info', 'Fallback extraction successful', {
+            contractId,
+            chunks: chunks.length,
+            source: 'extracted_text'
+          })
+          
+          return chunks
+        } else {
+          log(requestId, 'warn', 'No extracted_text found in database', { contractId })
+        }
+      } catch (fallbackError) {
+        log(requestId, 'error', 'Fallback extraction failed', {
+          contractId,
+          error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        })
+      }
+    }
+    
+    // Both methods failed
+    log(requestId, 'error', 'All extraction methods failed', { contractId })
+    throw pdfError
   }
 }
 
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
+  const requestId = generateRequestId()
+  const totalTimer = startTimer()
+  
+  log(requestId, 'info', 'Compare request started')
+  
   try {
     const supabase = await createSupabaseServerClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
+      log(requestId, 'warn', 'Unauthorized request')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
+    log(requestId, 'info', 'User authenticated', { userId: user.id.slice(0, 8) + '...' })
 
     const body = await request.json().catch(() => null)
     if (!body?.contractAUrl || !body?.contractBUrl) {
+      log(requestId, 'error', 'Missing required parameters', { body: Object.keys(body || {}) })
       return NextResponse.json(
         { error: 'contractAUrl and contractBUrl are required' },
         { status: 400 }
@@ -62,8 +254,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { contractAUrl, contractBUrl, contractAId, contractBId } = body
+    
+    log(requestId, 'info', 'Request parameters', {
+      contractAId: contractAId || 'none',
+      contractBId: contractBId || 'none',
+      hasContractAUrl: !!contractAUrl,
+      hasContractBUrl: !!contractBUrl
+    })
 
     // Create a pending record
+    const recordTimer = startTimer()
     const { data: record, error: insertError } = await supabase
       .from('contract_comparisons')
       .insert({
@@ -78,32 +278,52 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError || !record) {
+      log(requestId, 'error', 'Failed to create comparison record', {
+        error: insertError?.message,
+        elapsedMs: getElapsedMs(recordTimer)
+      })
       return NextResponse.json({ error: 'Failed to create comparison record' }, { status: 500 })
     }
+    
+    log(requestId, 'info', 'Comparison record created', { 
+      comparisonId: record.id,
+      elapsedMs: getElapsedMs(recordTimer)
+    })
 
     try {
-      // Load modules dynamically
-      const { extractPdfChunks } = await loadPDF()
-      
-      // Convert raw R2 URLs to presigned URLs (R2 requires auth for access)
+      // Step 1: Generate presigned URLs
+      const urlTimer = startTimer()
       const [signedUrlA, signedUrlB] = await Promise.all([
-        toPresignedUrl(contractAUrl),
-        toPresignedUrl(contractBUrl),
+        toPresignedUrl(contractAUrl, requestId),
+        toPresignedUrl(contractBUrl, requestId),
       ])
+      log(requestId, 'info', 'Presigned URLs generated', { elapsedMs: getElapsedMs(urlTimer) })
 
-      // Extract chunks from both PDFs in parallel
+      // Step 2: Extract chunks from both sources with fallback
+      const extractTimer = startTimer()
       const [chunksA, chunksB] = await Promise.all([
-        extractPdfChunks(signedUrlA),
-        extractPdfChunks(signedUrlB),
+        extractChunksWithFallback(signedUrlA, contractAId, requestId, supabase),
+        extractChunksWithFallback(signedUrlB, contractBId, requestId, supabase),
       ])
+      
+      log(requestId, 'info', 'Chunks extracted', {
+        chunksA: chunksA.length,
+        chunksB: chunksB.length,
+        elapsedMs: getElapsedMs(extractTimer)
+      })
 
       // Limit chunks sent to Claude to avoid token overflow
       const MAX_CHUNKS = 80
       const chunksAForAI = chunksA.slice(0, MAX_CHUNKS).map((chunk: { id: string, text: string, page: number }) => ({ id: chunk.id, text: chunk.text, page: chunk.page }))
       const chunksBForAI = chunksB.slice(0, MAX_CHUNKS).map((chunk: { id: string, text: string, page: number }) => ({ id: chunk.id, text: chunk.text, page: chunk.page }))
 
+      log(requestId, 'info', 'Chunks prepared for AI', {
+        chunksAForAI: chunksAForAI.length,
+        chunksBForAI: chunksBForAI.length
+      })
+
       if (!process.env.ANTHROPIC_API_KEY) {
-        // Demo mode: return mock comparison
+        log(requestId, 'warn', 'No ANTHROPIC_API_KEY, using demo mode')
         const mockResult = buildMockResult(chunksA, chunksB)
         await supabase
           .from('contract_comparisons')
@@ -112,6 +332,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ comparison: mockResult, chunksA, chunksB, comparisonId: record.id })
       }
 
+      // Step 3: AI Analysis
+      const aiTimer = startTimer()
       const { anthropic, generateText } = await loadAI()
 
       const prompt = `You are analyzing two contracts for comparison. Return ONLY valid JSON, no other text.
@@ -157,19 +379,28 @@ Return JSON only:
       let lastError: unknown
       for (const modelId of MODELS) {
         try {
+          log(requestId, 'info', `Trying AI model ${modelId}`)
           const result = await generateText({ model: anthropic(modelId), prompt })
           rawText = result.text
+          log(requestId, 'info', `AI model ${modelId} succeeded`, { responseLength: rawText.length })
           break
         } catch (err) {
-          console.error(`[compare] ${modelId} failed:`, err)
+          log(requestId, 'error', `AI model ${modelId} failed`, {
+            error: err instanceof Error ? err.message : String(err)
+          })
           lastError = err
         }
       }
-      if (!rawText) throw lastError
+      
+      if (!rawText) {
+        throw lastError
+      }
 
       // Strip markdown code fences if present
       const jsonText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
       const comparison = JSON.parse(jsonText)
+      
+      log(requestId, 'info', 'AI analysis complete', { elapsedMs: getElapsedMs(aiTimer) })
 
       await supabase
         .from('contract_comparisons')
@@ -180,6 +411,13 @@ Return JSON only:
         })
         .eq('id', record.id)
 
+      const totalElapsed = getElapsedMs(totalTimer)
+      log(requestId, 'info', 'Compare request completed successfully', {
+        totalElapsedMs: totalElapsed,
+        comparisonId: record.id,
+        matches: comparison.matches?.length || 0
+      })
+
       return NextResponse.json({ 
         comparison, 
         chunksA, 
@@ -189,19 +427,30 @@ Return JSON only:
         signedUrlB
       })
     } catch (err) {
-      console.error('Compare error:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Comparison failed'
+      log(requestId, 'error', 'Compare processing error', {
+        error: errorMessage,
+        stack: err instanceof Error ? err.stack : undefined,
+        totalElapsedMs: getElapsedMs(totalTimer)
+      })
+      
       await supabase
         .from('contract_comparisons')
         .update({ status: 'error' })
         .eq('id', record.id)
 
       return NextResponse.json(
-        { error: err instanceof Error ? err.message : 'Comparison failed' },
+        { error: errorMessage },
         { status: 500 }
       )
     }
   } catch (outerErr) {
-    console.error('Route handler error:', outerErr)
+    log(requestId, 'error', 'Route handler error', {
+      error: outerErr instanceof Error ? outerErr.message : String(outerErr),
+      stack: outerErr instanceof Error ? outerErr.stack : undefined,
+      totalElapsedMs: getElapsedMs(totalTimer)
+    })
+    
     return NextResponse.json(
       { error: outerErr instanceof Error ? outerErr.message : 'Internal server error' },
       { status: 500 }
