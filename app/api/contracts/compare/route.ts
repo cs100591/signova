@@ -146,10 +146,26 @@ Return JSON only:
   ]
 }`
 
-      const { text: rawText } = await generateText({
-        model: anthropic('claude-haiku-4-5-20251001'),
-        prompt,
-      })
+      // Try Haiku first, fall back to Sonnet, then Opus
+      const MODELS = [
+        'claude-haiku-4-5-20251001',
+        'claude-sonnet-4-5-20251001',
+        'claude-opus-4-5-20251001',
+      ] as const
+
+      let rawText = ''
+      let lastError: unknown
+      for (const modelId of MODELS) {
+        try {
+          const result = await generateText({ model: anthropic(modelId), prompt })
+          rawText = result.text
+          break
+        } catch (err) {
+          console.error(`[compare] ${modelId} failed:`, err)
+          lastError = err
+        }
+      }
+      if (!rawText) throw lastError
 
       // Strip markdown code fences if present
       const jsonText = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
