@@ -22,10 +22,12 @@ export type ComparedChunk = {
   changeType?: "modified" | "added" | "removed" | "unchanged";
   topic?: string;
   summary?: string;
+  matchIndex?: number;
 };
 
 export type HighlightedPdfViewerHandle = {
   scrollToChunk: (chunkId: string) => void;
+  getScrollContainer: () => HTMLElement | null;
 };
 
 type Props = {
@@ -110,6 +112,7 @@ function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
 const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
   ({ pdfUrl, chunks, label }, ref) => {
     const scrollRef = useRef<(highlight: IHighlight) => void>(() => {});
+    const containerRef = useRef<HTMLDivElement>(null);
     const highlights = chunksToHighlights(chunks);
 
     console.log("[HighlightedPdfViewer] Render:", {
@@ -124,6 +127,10 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
         const h = highlights.find((h) => h.id === chunkId);
         if (h) scrollRef.current(h);
       },
+      getScrollContainer() {
+        // PdfHighlighter renders a scrollable div inside our container
+        return containerRef.current?.querySelector(".PdfHighlighter") as HTMLElement | null;
+      },
     }));
 
     return (
@@ -133,7 +140,7 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
             {label}
           </div>
         )}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" ref={containerRef}>
           <div style={{ position: "absolute", inset: 0 }}>
             <PdfLoader url={pdfUrl} beforeLoad={<PdfLoadingSpinner />} errorMessage={<PdfErrorDisplay />}>
             {(pdfDocument) => (
@@ -162,6 +169,7 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
                       highlight={highlight}
                       isScrolledTo={isScrolledTo}
                       color={color}
+                      matchIndex={chunk?.matchIndex}
                       onClickHighlight={() => {
                         setTip(highlight, (h) => (
                           <HighlightTooltip highlight={h} color={color} />
@@ -214,17 +222,44 @@ function ColoredHighlight({
   highlight,
   isScrolledTo,
   color,
+  matchIndex,
   onClickHighlight,
   onMouseOut,
 }: {
   highlight: T_ViewportHighlight<IHighlight>;
   isScrolledTo: boolean;
   color: string;
+  matchIndex?: number;
   onClickHighlight: () => void;
   onMouseOut: () => void;
 }) {
+  const firstRect = highlight.position.rects[0];
   return (
     <div style={{ position: "relative" }}>
+      {/* Match index badge */}
+      {matchIndex != null && firstRect && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${firstRect.left}px`,
+            top: `${firstRect.top - 8}px`,
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            background: "#1a1714",
+            color: "#fff",
+            fontSize: 9,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+        >
+          {matchIndex}
+        </div>
+      )}
       {/* Render color overlay rects manually */}
       {highlight.position.rects.map((rect, i) => (
         <div

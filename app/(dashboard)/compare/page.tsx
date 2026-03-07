@@ -51,6 +51,7 @@ function buildViewerChunks(
       side === "A" ? m.chunkA === chunk.id : m.chunkB === chunk.id
     );
     if (!match) return chunk;
+    const matchIndex = matches.indexOf(match);
     return {
       ...chunk,
       riskLevel: side === "A" ? match.riskA : match.riskB,
@@ -58,6 +59,7 @@ function buildViewerChunks(
       changeType: match.changeType,
       topic: match.topic,
       summary: match.summary,
+      matchIndex: matchIndex >= 0 ? matchIndex + 1 : undefined,
     };
   });
 
@@ -82,6 +84,7 @@ export default function ComparePage() {
 
   const viewerARef = useRef<HighlightedPdfViewerHandle>(null);
   const viewerBRef = useRef<HighlightedPdfViewerHandle>(null);
+  const isSyncing = useRef(false);
 
   // Fetch user's contracts for the selectors
   useEffect(() => {
@@ -136,6 +139,35 @@ export default function ComparePage() {
     },
     [result]
   );
+
+  // Sync scroll between left and right PDF viewers
+  useEffect(() => {
+    if (!result) return;
+    // Small delay to let PdfHighlighter mount
+    const timer = setTimeout(() => {
+      const containerA = viewerARef.current?.getScrollContainer();
+      const containerB = viewerBRef.current?.getScrollContainer();
+      if (!containerA || !containerB) return;
+
+      const handleScroll = (source: HTMLElement, target: HTMLElement) => () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        target.scrollTop = source.scrollTop;
+        requestAnimationFrame(() => { isSyncing.current = false; });
+      };
+
+      const onScrollA = handleScroll(containerA, containerB);
+      const onScrollB = handleScroll(containerB, containerA);
+      containerA.addEventListener("scroll", onScrollA);
+      containerB.addEventListener("scroll", onScrollB);
+
+      return () => {
+        containerA.removeEventListener("scroll", onScrollA);
+        containerB.removeEventListener("scroll", onScrollB);
+      };
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [result]);
 
   const chunksA = result
     ? buildViewerChunks(result.chunksA, result.comparison.matches, "A")
@@ -263,6 +295,8 @@ export default function ComparePage() {
             <ChangeSummaryPanel
               matches={result.comparison.matches}
               onSelectMatch={handleSelectMatch}
+              chunksA={result.chunksA}
+              chunksB={result.chunksB}
             />
           </div>
         </div>

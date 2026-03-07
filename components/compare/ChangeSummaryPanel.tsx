@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import type { ComparedChunk } from "./HighlightedPdfViewer";
+
 export type ComparisonMatch = {
   topic: string;
   chunkA: string | null;
@@ -21,6 +24,8 @@ type Group = {
 type Props = {
   matches: ComparisonMatch[];
   onSelectMatch: (index: number) => void;
+  chunksA?: ComparedChunk[];
+  chunksB?: ComparedChunk[];
 };
 
 function groupMatches(matches: ComparisonMatch[]): Group[] {
@@ -55,12 +60,13 @@ function groupMatches(matches: ComparisonMatch[]): Group[] {
 const RISK_CHANGE_LABELS: Record<string, string> = {
   increased: "Risk ↑",
   decreased: "Risk ↓",
-  same: "Same",
+  same: "Modified",
   new: "New",
   removed: "Removed",
 };
 
-export default function ChangeSummaryPanel({ matches, onSelectMatch }: Props) {
+export default function ChangeSummaryPanel({ matches, onSelectMatch, chunksA, chunksB }: Props) {
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const groups = groupMatches(matches);
   const changedCount = matches.filter((m) => m.changeType !== "unchanged").length;
 
@@ -112,26 +118,56 @@ export default function ChangeSummaryPanel({ matches, onSelectMatch }: Props) {
             </div>
 
             <div className="space-y-1.5">
-              {group.items.map(({ match, index }) => (
-                <button
-                  key={index}
-                  onClick={() => onSelectMatch(index)}
-                  className="w-full text-left rounded-lg border border-[#e0d9ce] bg-white px-3 py-2.5 hover:border-[#c8873a] hover:shadow-sm transition-all"
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className="mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
-                      style={{ backgroundColor: group.bg, color: group.color }}
-                    >
-                      {RISK_CHANGE_LABELS[match.riskChange] ?? match.riskChange}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-[#1a1714] truncate">{match.topic}</p>
-                      <p className="text-xs text-[#9a8f82] mt-0.5 line-clamp-2">{match.summary}</p>
+              {group.items.map(({ match, index }) => {
+                const isExpanded = expandedIndex === index;
+                const chunkAText = match.chunkA && chunksA ? chunksA.find(c => c.id === match.chunkA)?.text : null;
+                const chunkBText = match.chunkB && chunksB ? chunksB.find(c => c.id === match.chunkB)?.text : null;
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setExpandedIndex(isExpanded ? null : index);
+                      onSelectMatch(index);
+                    }}
+                    className="w-full text-left rounded-lg border border-[#e0d9ce] bg-white px-3 py-2.5 hover:border-[#c8873a] hover:shadow-sm transition-all"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#1a1714] text-white text-[10px] font-bold flex items-center justify-center mt-0.5">
+                        {index + 1}
+                      </span>
+                      <span
+                        className="mt-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+                        style={{ backgroundColor: group.bg, color: group.color }}
+                      >
+                        {RISK_CHANGE_LABELS[match.riskChange] ?? match.riskChange}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-[#1a1714] truncate">{match.topic}</p>
+                        <p className={`text-xs text-[#9a8f82] mt-0.5 ${isExpanded ? "" : "line-clamp-2"}`}>{match.summary}</p>
+                      </div>
+                      <span className="flex-shrink-0 text-[10px] text-[#9a8f82] mt-0.5">
+                        {isExpanded ? "▲" : "▼"}
+                      </span>
                     </div>
-                  </div>
-                </button>
-              ))}
+                    {isExpanded && (
+                      <div className="mt-2 pt-2 border-t border-[#e0d9ce] space-y-2 text-xs text-[#4a3f35]">
+                        {chunkAText && (
+                          <div>
+                            <span className="font-semibold text-[#9a8f82]">Contract A: </span>
+                            <span>{chunkAText}</span>
+                          </div>
+                        )}
+                        {chunkBText && (
+                          <div>
+                            <span className="font-semibold text-[#9a8f82]">Contract B: </span>
+                            <span>{chunkBText}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         ))}
