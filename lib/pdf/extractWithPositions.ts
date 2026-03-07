@@ -187,9 +187,9 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
     
     const buffer = Buffer.from(await response.arrayBuffer())
     
-    // Load PDF with pdfjs
+    // Load PDF with pdfjs - must use Uint8Array, not Buffer
     const pdf = await getDocument({ 
-      data: buffer,
+      data: new Uint8Array(buffer),
       verbosity: 0,
     }).promise
     
