@@ -236,25 +236,26 @@ function ColoredHighlight({
   const firstRect = highlight.position.rects[0];
   return (
     <div style={{ position: "relative" }}>
-      {/* Match index badge */}
+      {/* Match index badge — positioned to the left of the highlight */}
       {matchIndex != null && firstRect && (
         <div
           style={{
             position: "absolute",
-            left: `${firstRect.left}px`,
-            top: `${firstRect.top - 8}px`,
-            width: 16,
-            height: 16,
+            left: `${Math.max(firstRect.left - 20, 2)}px`,
+            top: `${firstRect.top}px`,
+            width: 18,
+            height: 18,
             borderRadius: "50%",
-            background: "#1a1714",
+            background: color,
             color: "#fff",
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 700,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 10,
             pointerEvents: "none",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
           }}
         >
           {matchIndex}
@@ -271,11 +272,12 @@ function ColoredHighlight({
             left: `${rect.left}px`,
             top: `${rect.top}px`,
             width: `${rect.width}px`,
-            height: `${rect.height}px`,
+            height: `${Math.max(rect.height, 4)}px`,
             background: color,
-            opacity: 0.35,
+            opacity: 0.2,
             cursor: "pointer",
-            borderRadius: 2,
+            borderRadius: 3,
+            borderLeft: `3px solid ${color}`,
           }}
         />
       ))}

@@ -191,17 +191,42 @@ export async function extractPdfChunks(pdfUrl: string): Promise<PdfChunk[]> {
     
     const buffer = Buffer.from(await response.arrayBuffer())
     
+    // Validate that we actually received PDF data (not an HTML error page)
+    if (buffer.length < 10) {
+      throw new Error(`PDF data too small (${buffer.length} bytes), likely invalid`)
+    }
+    
+    // Check for PDF magic bytes (%PDF-)
+    const header = buffer.slice(0, 5).toString('ascii')
+    if (!header.startsWith('%PDF-')) {
+      const preview = buffer.slice(0, 100).toString('utf-8')
+      console.error('[extractPdfChunks] Not a valid PDF file. Header:', preview.substring(0, 200))
+      throw new Error(`Not a valid PDF file (received ${buffer.length} bytes, header: "${header}")`)
+    }
+    
     // Load PDF with pdfjs - must use Uint8Array, not Buffer
     const pdf = await getDocument({ 
       data: new Uint8Array(buffer),
       verbosity: 0,
     }).promise
     
+    console.log(`[extractPdfChunks] PDF loaded: ${pdf.numPages} pages, ${buffer.length} bytes`)
+    
+    if (pdf.numPages === 0) {
+      throw new Error('PDF has 0 pages')
+    }
+    
     let chunkIndex = 0
     
     // Process each page
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum)
+      let page
+      try {
+        page = await pdf.getPage(pageNum)
+      } catch (pageErr) {
+        console.error(`[extractPdfChunks] Failed to get page ${pageNum}/${pdf.numPages}:`, pageErr)
+        continue // Skip this page instead of failing the whole extraction
+      }
       const textContent = await page.getTextContent()
       const viewport = page.getViewport({ scale: 1.0 })
       const pageWidth = viewport.width
@@ -287,9 +312,11 @@ export async function extractChunksWithFallback(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     
-    // If it's a "no text" error and we have a contract ID, try database fallback
-    if (errorMessage.includes('NO_TEXT_EXTRACTED') && contractId) {
-      console.log(`[extractChunksWithFallback] PDF extraction returned no text, trying database fallback for ${contractId}`);
+    // Try database fallback for any PDF extraction failure when we have a contract ID
+    // This covers: scanned PDFs (NO_TEXT_EXTRACTED), corrupted PDFs (Invalid page request), 
+    // invalid data (Not a valid PDF), etc.
+    if (contractId) {
+      console.log(`[extractChunksWithFallback] PDF extraction failed (${errorMessage}), trying database fallback for ${contractId}`);
       
       try {
         const { data: contract, error: dbError } = await supabase
@@ -341,7 +368,7 @@ export async function extractChunksWithFallback(
       }
     }
     
-    // Re-throw original error if fallback didn't work
-    throw error;
+    // Re-throw with a more user-friendly error message
+    throw new Error(`Failed to extract text from PDF. ${contractId ? 'The document may be corrupted or in an unsupported format.' : 'Please try re-uploading the file.'}`);
   }
 }
