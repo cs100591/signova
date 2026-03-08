@@ -173,6 +173,7 @@ function TerminalPageInner() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isSendingRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -473,7 +474,8 @@ function TerminalPageInner() {
 
   // ── Send message handler ────────────────────────────────────────────────
   const handleSendMessage = async (text: string) => {
-    if (!text.trim() || isAnalyzing || isTyping) return;
+    if (!text.trim() || isAnalyzing || isTyping || isSendingRef.current) return;
+    isSendingRef.current = true;
 
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
@@ -484,14 +486,18 @@ function TerminalPageInner() {
     setInputText("");
     setShowContractInput(false);
 
-    // If we have contract text and haven't analysed yet → run analysis
-    if (contractText && !analysisComplete) {
-      setIsAnalyzing(true);
-      await startContractAnalysis(contractText, linkedContractId);
-    } else {
-      setIsTyping(true);
-      // Follow-up question or general chat
-      await handleRegularChat(text);
+    try {
+      // If we have contract text and haven't analysed yet → run analysis
+      if (contractText && !analysisComplete) {
+        setIsAnalyzing(true);
+        await startContractAnalysis(contractText, linkedContractId);
+      } else {
+        setIsTyping(true);
+        // Follow-up question or general chat
+        await handleRegularChat(text);
+      }
+    } finally {
+      isSendingRef.current = false;
     }
   };
 

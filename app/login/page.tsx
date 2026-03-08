@@ -306,9 +306,9 @@ function LoginForm() {
           {!isLogin && (
             <p className="text-xs text-[#7a7168] text-center mt-6">
               By creating an account, you agree to our{" "}
-              <a href="#" className="text-[#1a1714] hover:underline">Terms of Service</a>
+              <a href="/terms" className="text-[#1a1714] hover:underline">Terms of Service</a>
               {" "}and{" "}
-              <a href="#" className="text-[#1a1714] hover:underline">Privacy Policy</a>.
+              <a href="/privacy" className="text-[#1a1714] hover:underline">Privacy Policy</a>.
             </p>
           )}
         </motion.div>
