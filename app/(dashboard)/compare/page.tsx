@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { GitMerge, AlertTriangle, ChevronDown, Loader2 } from "lucide-react";
+import { GitMerge, AlertTriangle, ChevronDown, Loader2, Sparkles, ArrowUpRight } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { HighlightedPdfViewerHandle, ComparedChunk } from "@/components/compare/HighlightedPdfViewer";
 import ChangeSummaryPanel, { ComparisonMatch } from "@/components/compare/ChangeSummaryPanel";
+import CompareHistory, { CompareHistoryItem } from "@/components/compare/CompareHistory";
 
 // Lazy-load the PDF viewer to avoid SSR issues
 const HighlightedPdfViewer = dynamic(
@@ -39,82 +40,52 @@ function buildViewerChunks(
   matches: ComparisonMatch[],
   side: "A" | "B"
 ): ComparedChunk[] {
-  console.log(`[buildViewerChunks ${side}] Input:`, {
-    chunkCount: chunks.length,
-    matchCount: matches.length,
-    sampleChunkIds: chunks.slice(0, 3).map(c => c.id),
-    sampleMatchChunkRefs: matches.slice(0, 3).map(m => ({ chunkA: m.chunkA, chunkB: m.chunkB }))
-  });
-
-  // Create a map to track which chunks have been assigned to which match
-  // isPrimary: true for the originally matched chunk (shows badge), false for expanded chunks
   const chunkToMatchMap = new Map<string, { match: ComparisonMatch; matchIndex: number; isPrimary: boolean }>();
   
   // First pass: assign matches to their directly referenced chunks
-  // Only assign sequential numbers to chunks that actually exist
-  let validMatchIndex = 0;
-  matches.forEach((match) => {
+  matches.forEach((match, idx) => {
     const chunkId = side === "A" ? match.chunkA : match.chunkB;
-    // Only assign number if chunkId exists AND the chunk is in our chunks array
     if (chunkId && chunks.some(c => c.id === chunkId)) {
-      validMatchIndex++;
-      chunkToMatchMap.set(chunkId, { match, matchIndex: validMatchIndex, isPrimary: true });
+      chunkToMatchMap.set(chunkId, { match, matchIndex: idx + 1, isPrimary: true });
     }
   });
 
   // Second pass: expand to nearby chunks (same section/topic)
-  // Collect all expansions first, then add to map (avoid modifying during iteration)
   const expansions: { chunkId: string; match: ComparisonMatch; matchIndex: number }[] = [];
   
   chunkToMatchMap.forEach((data, matchedChunkId) => {
-    if (!data.isPrimary) return; // Only expand from primary chunks
-    
+    if (!data.isPrimary) return;
     const matchedChunk = chunks.find(c => c.id === matchedChunkId);
     if (!matchedChunk) return;
     
-    // Find all chunks on the same page that are nearby
     const samePageChunks = chunks.filter(c => 
       c.page === matchedChunk.page && 
       c.id !== matchedChunkId &&
-      !chunkToMatchMap.has(c.id) // Don't override already matched chunks
+      !chunkToMatchMap.has(c.id)
     );
     
-    // If the matched chunk is a title (short text), include content chunks below it
-    const isTitle = matchedChunk.text.length < 50;
+    const isTitle = matchedChunk.text.length < 60;
     
     samePageChunks.forEach(nearbyChunk => {
       const yDiff = nearbyChunk.y - matchedChunk.y;
+      const downThreshold = isTitle ? 200 : 120;
+      const upThreshold = 40;
       
-      // For titles: include chunks within 200 points below
-      // For content: include nearby chunks within 100 points
-      const threshold = isTitle ? 200 : 100;
-      
-      if (yDiff > 0 && yDiff < threshold) {
-        expansions.push({
-          chunkId: nearbyChunk.id,
-          match: data.match,
-          matchIndex: data.matchIndex
-        });
+      if ((yDiff > 0 && yDiff < downThreshold) || (yDiff < 0 && yDiff > -upThreshold)) {
+        expansions.push({ chunkId: nearbyChunk.id, match: data.match, matchIndex: data.matchIndex });
       }
     });
   });
   
-  // Add expansions to map (after iteration is complete)
   expansions.forEach(({ chunkId, match, matchIndex }) => {
     if (!chunkToMatchMap.has(chunkId)) {
-      chunkToMatchMap.set(chunkId, { 
-        match, 
-        matchIndex,
-        isPrimary: false // Expanded chunks don't show badge
-      });
+      chunkToMatchMap.set(chunkId, { match, matchIndex, isPrimary: false });
     }
   });
 
-  // Build the final result
-  const result = chunks.map((chunk) => {
+  return chunks.map((chunk) => {
     const mapping = chunkToMatchMap.get(chunk.id);
     if (!mapping) return chunk;
-    
     const { match, matchIndex, isPrimary } = mapping;
     return {
       ...chunk,
@@ -123,26 +94,9 @@ function buildViewerChunks(
       changeType: match.changeType,
       topic: match.topic,
       summary: match.summary,
-      matchIndex: isPrimary ? matchIndex : undefined, // Only primary chunks show badge
+      matchIndex: isPrimary ? matchIndex : undefined,
     };
   });
-
-  const enhancedCount = result.filter(c => c.riskLevel || c.riskChange || c.changeType).length;
-  const primaryCount = result.filter(c => c.matchIndex).length;
-  console.log(`[buildViewerChunks ${side}] Output:`, {
-    totalChunks: result.length,
-    enhancedWithRiskInfo: enhancedCount,
-    primaryChunks: primaryCount,
-    expandedChunks: expansions.length,
-    sampleEnhanced: result.filter(c => c.matchIndex).slice(0, 3).map(c => ({ 
-      id: c.id, 
-      matchIndex: c.matchIndex,
-      riskLevel: c.riskLevel, 
-      changeType: c.changeType 
-    }))
-  });
-
-  return result;
 }
 
 export default function ComparePage() {
@@ -154,11 +108,24 @@ export default function ComparePage() {
   const [result, setResult] = useState<ApiResponse | null>(null);
   const [warningDismissed, setWarningDismissed] = useState(false);
 
+  // History state
+  const [history, setHistory] = useState<CompareHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [loadingHistoryId, setLoadingHistoryId] = useState<string | null>(null);
+
+  // Quota state
+  const [comparisonsUsed, setComparisonsUsed] = useState(0);
+  const [comparisonsLimit, setComparisonsLimit] = useState(0);
+
+  // Labels for history-loaded comparisons
+  const [labelA, setLabelA] = useState<string>("");
+  const [labelB, setLabelB] = useState<string>("");
+
   const viewerARef = useRef<HighlightedPdfViewerHandle>(null);
   const viewerBRef = useRef<HighlightedPdfViewerHandle>(null);
   const isSyncing = useRef(false);
 
-  // Fetch user's contracts for the selectors
+  // Fetch contracts + history on mount
   useEffect(() => {
     fetch("/api/contracts")
       .then((r) => r.json())
@@ -167,10 +134,33 @@ export default function ComparePage() {
         else if (Array.isArray(data?.contracts)) setContracts(data.contracts.filter((c: Contract) => c.file_url));
       })
       .catch(() => {});
+
+    fetchHistory();
+  }, []);
+
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/contracts/compare");
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.history || []);
+        setComparisonsUsed(data.comparisonsUsed ?? 0);
+        setComparisonsLimit(data.comparisonsLimit ?? 0);
+      }
+    } catch { /* ignore */ }
+    setHistoryLoading(false);
   }, []);
 
   const handleCompare = useCallback(async () => {
     if (!contractA || !contractB) return;
+
+    // Check quota client-side
+    if (comparisonsUsed >= comparisonsLimit) {
+      setError("COMPARISON_LIMIT_REACHED");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -190,17 +180,63 @@ export default function ComparePage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Error ${res.status}`);
+        if (err.error === "COMPARISON_LIMIT_REACHED") {
+          setError("COMPARISON_LIMIT_REACHED");
+          setComparisonsUsed(err.comparisonsUsed ?? comparisonsUsed);
+          setComparisonsLimit(err.comparisonsLimit ?? comparisonsLimit);
+        } else {
+          throw new Error(err.error || `Error ${res.status}`);
+        }
+        return;
       }
 
       const data: ApiResponse = await res.json();
       setResult(data);
+      setLabelA(contractA.name);
+      setLabelB(contractB.name);
+      setComparisonsUsed(prev => prev + 1);
+      // Refresh history
+      fetchHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Comparison failed");
     } finally {
       setLoading(false);
     }
-  }, [contractA, contractB]);
+  }, [contractA, contractB, comparisonsUsed, comparisonsLimit, fetchHistory]);
+
+  const handleLoadHistory = useCallback(async (comparisonId: string) => {
+    setLoadingHistoryId(comparisonId);
+    setError(null);
+    setResult(null);
+
+    try {
+      const res = await fetch(`/api/contracts/compare?id=${comparisonId}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to load comparison");
+      }
+
+      const data: ApiResponse = await res.json();
+      setResult(data);
+      setWarningDismissed(false);
+
+      // Find history item to set labels
+      const item = history.find(h => h.id === comparisonId);
+      if (item) {
+        setLabelA(item.contractAName);
+        setLabelB(item.contractBName);
+        // Auto-select contracts in dropdowns if available
+        const cA = contracts.find(c => c.id === item.contractAId);
+        const cB = contracts.find(c => c.id === item.contractBId);
+        if (cA) setContractA(cA);
+        if (cB) setContractB(cB);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load comparison");
+    } finally {
+      setLoadingHistoryId(null);
+    }
+  }, [history, contracts]);
 
   const handleSelectMatch = useCallback(
     (index: number) => {
@@ -215,7 +251,6 @@ export default function ComparePage() {
   // Sync scroll between left and right PDF viewers
   useEffect(() => {
     if (!result) return;
-    // Small delay to let PdfHighlighter mount
     const timer = setTimeout(() => {
       const containerA = viewerARef.current?.getScrollContainer();
       const containerB = viewerBRef.current?.getScrollContainer();
@@ -248,8 +283,9 @@ export default function ComparePage() {
     ? buildViewerChunks(result.chunksB, result.comparison.matches, "B")
     : [];
 
-  const showWarning =
-    result && !result.comparison.sameType && !warningDismissed;
+  const showWarning = result && !result.comparison.sameType && !warningDismissed;
+  const isOverQuota = error === "COMPARISON_LIMIT_REACHED";
+  const remaining = Math.max(comparisonsLimit - comparisonsUsed, 0);
 
   return (
     <div className="flex flex-col h-full bg-[#F8F7F4]">
@@ -288,7 +324,7 @@ export default function ComparePage() {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Comparing…
+                  Comparing...
                 </>
               ) : (
                 <>
@@ -297,9 +333,41 @@ export default function ComparePage() {
                 </>
               )}
             </button>
+
+            {/* Quota badge */}
+            {comparisonsLimit > 0 && (
+              <span className={`text-[10px] font-medium px-2 py-1 rounded-full flex-shrink-0 ${
+                remaining === 0
+                  ? "bg-red-50 text-red-600"
+                  : remaining <= 1
+                  ? "bg-amber-50 text-amber-600"
+                  : "bg-[#f5f0e8] text-[#9a8f82]"
+              }`}>
+                {remaining}/{comparisonsLimit} remaining
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Quota exceeded banner */}
+      {isOverQuota && (
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-start gap-3">
+          <Sparkles className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm text-amber-800">
+            <span className="font-semibold">Comparison limit reached.</span>{" "}
+            You&apos;ve used all {comparisonsLimit} comparison{comparisonsLimit !== 1 ? "s" : ""} on your current plan.
+            Upgrade to get more comparisons per month.
+          </div>
+          <a
+            href="/settings?tab=billing"
+            className="flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-100 px-3 py-1.5 rounded-lg flex-shrink-0 transition-colors"
+          >
+            Upgrade
+            <ArrowUpRight className="w-3 h-3" />
+          </a>
+        </div>
+      )}
 
       {/* Warning banner */}
       {showWarning && (
@@ -307,7 +375,7 @@ export default function ComparePage() {
           <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <div className="flex-1 text-sm text-amber-800">
             <span className="font-semibold">Different contract types detected.</span>{" "}
-            {result.comparison.typeWarning || "These contracts may be different types — comparison results may be less accurate."}
+            {result!.comparison.typeWarning || "These contracts may be different types — comparison results may be less accurate."}
           </div>
           <button
             onClick={() => setWarningDismissed(true)}
@@ -318,23 +386,32 @@ export default function ComparePage() {
         </div>
       )}
 
-      {/* Error */}
-      {error && (
+      {/* Error (non-quota) */}
+      {error && !isOverQuota && (
         <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* Main content */}
+      {/* Main content: History or Results */}
       {!result && !loading && (
-        <EmptyState hasContracts={contracts.length > 0} />
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="max-w-2xl mx-auto">
+            <CompareHistory
+              history={history}
+              loading={historyLoading}
+              onSelect={handleLoadHistory}
+              loadingId={loadingHistoryId}
+            />
+          </div>
+        </div>
       )}
 
       {loading && (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3 text-[#9a8f82]">
             <Loader2 className="w-8 h-8 animate-spin text-[#c8873a]" />
-            <p className="text-sm">Extracting and comparing contracts…</p>
+            <p className="text-sm">Extracting and comparing contracts...</p>
             <p className="text-xs">This may take up to 30 seconds</p>
           </div>
         </div>
@@ -348,7 +425,7 @@ export default function ComparePage() {
               ref={viewerARef}
               pdfUrl={`/api/pdf-proxy?url=${encodeURIComponent(result.signedUrlA)}`}
               chunks={chunksA}
-              label={`Contract A — ${contractA!.name}`}
+              label={`Contract A — ${labelA || contractA?.name || "Unknown"}`}
             />
           </div>
 
@@ -358,7 +435,7 @@ export default function ComparePage() {
               ref={viewerBRef}
               pdfUrl={`/api/pdf-proxy?url=${encodeURIComponent(result.signedUrlB)}`}
               chunks={chunksB}
-              label={`Contract B — ${contractB!.name}`}
+              label={`Contract B — ${labelB || contractB?.name || "Unknown"}`}
             />
           </div>
 
@@ -410,24 +487,6 @@ function ContractSelector({
         ))}
       </select>
       <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9a8f82] pointer-events-none" />
-    </div>
-  );
-}
-
-function EmptyState({ hasContracts }: { hasContracts: boolean }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="text-center max-w-sm px-4">
-        <div className="w-14 h-14 rounded-2xl bg-[#f5f0e8] flex items-center justify-center mx-auto mb-4">
-          <GitMerge className="w-7 h-7 text-[#c8873a]" />
-        </div>
-        <h3 className="text-base font-semibold text-[#1a1714] mb-2">Compare two contracts</h3>
-        <p className="text-sm text-[#9a8f82]">
-          {hasContracts
-            ? "Select two contracts above and click Compare to see AI-powered risk highlights and a change summary."
-            : "Upload contracts first, then come back to compare them side by side."}
-        </p>
-      </div>
     </div>
   );
 }
