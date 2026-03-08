@@ -486,19 +486,19 @@ export default function ConfirmPage() {
 
       </div>
 
-      {/* Actions — fixed at bottom, outside scrollable container */}
-      <div className="fixed bottom-0 left-0 right-0 bg-[#F8F7F4] border-t border-[#E5E7EB] py-4 px-8 z-50">
+      {/* Actions */}
+      <div className="mt-8 pb-8">
         <div className="max-w-[800px] mx-auto flex gap-3 justify-center">
           <Button
             variant="outline"
-            className="px-8 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6] bg-white"
+            className="px-6 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6] bg-white"
             onClick={() => router.push("/upload")}
             disabled={saving}
           >
             Cancel
           </Button>
           <Button
-            className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium duration-200 ease-in-out disabled:opacity-70"
+            className="px-6 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium duration-200 ease-in-out disabled:opacity-70"
             onClick={handleSave}
             disabled={saving}
           >
