@@ -115,12 +115,16 @@ function LoginForm() {
         } else if (data.session) {
           // If email confirmation is disabled in Supabase, session is returned immediately
           setSuccess("Account created successfully! Redirecting...");
+          // Notify owner
+          fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.email, event: 'signup' }) }).catch(() => {});
           setTimeout(() => {
             checkOnboardingAndRedirect(data.user?.id);
           }, 800);
         } else {
           // Normal flow where email confirmation is required
           setShowVerifyModal(true);
+          // Notify owner
+          fetch('/api/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: formData.email, event: 'signup' }) }).catch(() => {});
         }
       }
     } catch (err: any) {
