@@ -9,13 +9,14 @@ const supabaseAdmin = createClient(
 export async function getUserUsage(userId: string) {
   const { data: profile } = await supabaseAdmin
     .from('profiles')
-    .select('plan, analyses_used, analyses_reset_date')
+    .select('plan, analyses_used, analyses_reset_date, comparisons_used, comparisons_reset_date')
     .eq('id', userId)
     .single();
 
   const plan = (profile?.plan || 'free') as PlanKey;
   const limits = PLANS[plan];
   const analysesUsed = profile?.analyses_used || 0;
+  const comparisonsUsed = profile?.comparisons_used || 0;
 
   // Count contracts
   const { count: contractCount } = await supabaseAdmin
@@ -28,6 +29,8 @@ export async function getUserUsage(userId: string) {
     limits,
     analysesUsed,
     analysesLimit: limits.analyses,
+    comparisonsUsed,
+    comparisonsLimit: limits.comparisons,
     contractCount: contractCount || 0,
     contractLimit: limits.contracts,
   };
@@ -54,6 +57,94 @@ export async function canAnalyzeContract(userId: string): Promise<{ allowed: boo
     };
   }
   return { allowed: true };
+}
+
+/**
+ * Check if user can perform a contract comparison.
+ * Free users get 1 lifetime comparison (not monthly reset).
+ * Paid users get monthly quota with reset.
+ */
+export async function canCompareContract(userId: string): Promise<{ allowed: boolean; reason?: string; comparisonsUsed: number; comparisonsLimit: number }> {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('plan, comparisons_used, comparisons_reset_date')
+    .eq('id', userId)
+    .single();
+
+  const plan = (profile?.plan || 'free') as PlanKey;
+  const limits = PLANS[plan];
+  let comparisonsUsed = profile?.comparisons_used || 0;
+
+  // For paid plans: check if monthly reset is needed
+  if (plan !== 'free') {
+    const now = new Date();
+    const resetDate = profile?.comparisons_reset_date ? new Date(profile.comparisons_reset_date) : null;
+    if (!resetDate || now > resetDate) {
+      // Reset the counter
+      comparisonsUsed = 0;
+      const nextReset = new Date(now);
+      nextReset.setMonth(nextReset.getMonth() + 1);
+      await supabaseAdmin
+        .from('profiles')
+        .update({ comparisons_used: 0, comparisons_reset_date: nextReset.toISOString() })
+        .eq('id', userId);
+    }
+  }
+
+  if (comparisonsUsed >= limits.comparisons) {
+    const periodText = plan === 'free' ? 'free' : 'monthly';
+    return {
+      allowed: false,
+      reason: `You've used all ${limits.comparisons} ${periodText} comparison${limits.comparisons !== 1 ? 's' : ''} on the ${limits.name} plan.`,
+      comparisonsUsed,
+      comparisonsLimit: limits.comparisons,
+    };
+  }
+
+  return { allowed: true, comparisonsUsed, comparisonsLimit: limits.comparisons };
+}
+
+/**
+ * Increment comparison usage counter.
+ * For free users: just increment (no reset).
+ * For paid users: increment with monthly reset logic.
+ */
+export async function incrementComparisonUsage(userId: string) {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('comparisons_used, comparisons_reset_date, plan')
+    .eq('id', userId)
+    .single();
+
+  const plan = (profile?.plan || 'free') as PlanKey;
+  const now = new Date();
+
+  if (plan === 'free') {
+    // Free users: just increment, never reset
+    await supabaseAdmin
+      .from('profiles')
+      .update({ comparisons_used: (profile?.comparisons_used || 0) + 1 })
+      .eq('id', userId);
+    return;
+  }
+
+  // Paid users: check monthly reset
+  const resetDate = profile?.comparisons_reset_date ? new Date(profile.comparisons_reset_date) : null;
+
+  if (!resetDate || now > resetDate) {
+    // Start new billing cycle
+    const nextReset = new Date(now);
+    nextReset.setMonth(nextReset.getMonth() + 1);
+    await supabaseAdmin
+      .from('profiles')
+      .update({ comparisons_used: 1, comparisons_reset_date: nextReset.toISOString() })
+      .eq('id', userId);
+  } else {
+    await supabaseAdmin
+      .from('profiles')
+      .update({ comparisons_used: (profile?.comparisons_used || 0) + 1 })
+      .eq('id', userId);
+  }
 }
 
 export async function incrementAnalysisUsage(userId: string) {

@@ -77,6 +77,9 @@ export async function POST(request: Request) {
     "GRANT ALL ON workspaces TO service_role",
     "GRANT ALL ON workspace_members TO authenticated",
     "GRANT ALL ON workspace_members TO service_role",
+    // Comparison usage tracking columns
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS comparisons_used INTEGER DEFAULT 0",
+    "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS comparisons_reset_date DATE",
     // Set business plan
     "UPDATE profiles SET plan = 'business' WHERE email = 'cs1005.91@gmail.com'",
   ];
