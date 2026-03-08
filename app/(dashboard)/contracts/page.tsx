@@ -129,10 +129,11 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   JPY: '¥', CNY: '¥', HKD: 'HK$', THB: '฿', KRW: '₩',
 };
 
-const formatCurrency = (amount: string | null, currency: string | null): string => {
-  if (!amount) return 'N/A';
-  const num = parseFloat(amount.replace(/[^0-9.-]/g, ''));
-  if (isNaN(num)) return amount;
+const formatCurrency = (amount: string | number | null, currency: string | null): string => {
+  if (amount === null || amount === undefined) return 'N/A';
+  const str = String(amount);
+  const num = parseFloat(str.replace(/[^0-9.-]/g, ''));
+  if (isNaN(num)) return str;
   const symbol = CURRENCY_SYMBOLS[currency || 'USD'] || (currency ? `${currency} ` : '$');
   return `${symbol}${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 };
