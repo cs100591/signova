@@ -270,9 +270,6 @@ export default function UsageStatsPanel() {
               </div>
               <span className="text-sm font-medium text-[#1A1A1A]">
                 {stats.comparisonUsed} / {stats.comparisonLimit}
-                {stats.plan === "free" && (
-                  <span className="text-xs text-[#6B7280] ml-1">(lifetime)</span>
-                )}
               </span>
             </div>
             <div className="h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
@@ -286,9 +283,7 @@ export default function UsageStatsPanel() {
             {getPercentage(stats.comparisonUsed, stats.comparisonLimit) > 80 && (
               <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                {stats.plan === "free"
-                  ? "Upgrade for more comparisons"
-                  : "You are approaching your monthly limit"}
+                You are approaching your monthly limit
               </p>
             )}
           </div>
@@ -368,9 +363,7 @@ export default function UsageStatsPanel() {
           <p className="text-2xl font-bold text-[#1A1A1A]">
             {stats.comparisonUsed}
           </p>
-          <p className="text-sm text-[#6B7280]">
-            {stats.plan === "free" ? "Lifetime" : "This month"}
-          </p>
+          <p className="text-sm text-[#6B7280]">This month</p>
         </div>
       </div>
     </div>

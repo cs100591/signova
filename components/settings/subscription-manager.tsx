@@ -215,7 +215,7 @@ export default function SubscriptionManager() {
 
             <div>
               <div className="flex justify-between text-sm mb-1">
-                <span className="text-[#6B7280]">AI Comparisons{usage.plan === "free" ? " (lifetime)" : ""}</span>
+                <span className="text-[#6B7280]">AI Comparisons</span>
                 <span className="font-medium text-[#1A1A1A]">
                   {usage.comparisonsUsed} / {usage.comparisonsLimit}
                 </span>

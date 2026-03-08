@@ -4,7 +4,7 @@ export const PLANS = {
     price: 0,
     contracts: 3,
     analyses: 3,
-    comparisons: 1,      // Lifetime, not monthly
+    comparisons: 1,      // Monthly reset like all plans
     workspaces: 1,
     seats: 1,
     expiryReminders: false,
