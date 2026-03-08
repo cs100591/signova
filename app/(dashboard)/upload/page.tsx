@@ -212,14 +212,14 @@ export default function UploadPage() {
                    <h2 className="text-xl font-bold">Exact Duplicate Detected</h2>
                  </div>
                  <p className="text-gray-600 mb-6">{duplicateData.message}</p>
-                 <div className="flex gap-4">
-                   <Button variant="outline" className="w-full" onClick={() => router.push(`/contracts/${duplicateData.existingContractId}`)}>
-                     View Existing
-                   </Button>
-                   <Button className="w-full bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { file_hash: duplicateData.fileHash, contract_group_id: duplicateData.contractGroupId })}>
-                     Upload Anyway
-                   </Button>
-                 </div>
+                 <div className="flex gap-3">
+                    <Button variant="outline" className="flex-1 min-w-0" onClick={() => router.push(`/contracts/${duplicateData.existingContractId}`)}>
+                      View Existing
+                    </Button>
+                    <Button className="flex-1 min-w-0 bg-[#F59E0B] hover:bg-[#D97706]" onClick={() => proceedToNextStep(contractData, { file_hash: duplicateData.fileHash, contract_group_id: duplicateData.contractGroupId })}>
+                      Upload Anyway
+                    </Button>
+                  </div>
                </>
              )}
              {duplicateData.type === 'NEW_VERSION' && (

@@ -344,10 +344,16 @@ export default function ContractDetailPage() {
                         </div>
                         <span className="text-sm text-[#6B7280]">Contract Value</span>
                       </div>
-                      <p className="font-medium text-[#1A1A1A]">{contract.amount}</p>
-                      {contract.currency && (
-                        <p className="text-sm text-[#6B7280]">{contract.currency}</p>
-                      )}
+                      <p className="font-medium text-[#1A1A1A]">
+                        {(() => {
+                          if (!contract.amount) return 'N/A';
+                          const num = parseFloat(String(contract.amount).replace(/[^0-9.-]/g, ''));
+                          if (isNaN(num)) return contract.amount;
+                          const symbols: Record<string, string> = { USD: '$', MYR: 'RM', SGD: 'S$', GBP: '£', EUR: '€', AUD: 'A$', INR: '₹', PHP: '₱', IDR: 'Rp', CAD: 'C$', JPY: '¥', CNY: '¥', HKD: 'HK$' };
+                          const sym = symbols[contract.currency || 'USD'] || (contract.currency ? `${contract.currency} ` : '$');
+                          return `${sym}${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+                        })()}
+                      </p>
                     </div>
                   )}
 

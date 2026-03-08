@@ -214,7 +214,8 @@ Output Format (JSON):
     "contract_type": "string",
     "party_a": "first party/company name",
     "party_b": "second party/company name",
-    "amount": "string or null",
+    "amount": "number or null — the single primary contract value as a plain number WITHOUT currency symbols, commas, or text. For recurring payments (e.g. monthly salary/rent), return ONLY the recurring amount, not the total. Examples: 5500, 120000, 49.99. Return null if no clear monetary value.",
+    "currency": "3-letter currency code (USD, MYR, SGD, GBP, EUR, AUD, etc.) or null",
     "effective_date": "YYYY-MM-DD",
     "expiry_date": "YYYY-MM-DD",
     "summary": "80-120 words"

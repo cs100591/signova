@@ -134,12 +134,18 @@ export default function ConfirmPage() {
     setSaving(true);
 
     try {
-      // Parse amount with NaN check
+      // Parse amount — extract only the first numeric value
+      // e.g. "MYR 5,500 monthly rent; MYR 11,000 deposit" → 5500
       let amount = null;
       if (editedData.amount) {
-        const cleaned = editedData.amount.toString().replace(/[^\d.]/g, "");
-        const parsed = cleaned ? parseFloat(cleaned) : null;
-        amount = parsed && !isNaN(parsed) ? parsed : null;
+        const str = editedData.amount.toString();
+        // Match the first number (with optional commas and decimals)
+        const match = str.match(/[\d,]+\.?\d*/);
+        if (match) {
+          const cleaned = match[0].replace(/,/g, "");
+          const parsed = parseFloat(cleaned);
+          amount = parsed && !isNaN(parsed) ? parsed : null;
+        }
       }
 
       const res = await fetch("/api/contracts", {
@@ -478,35 +484,36 @@ export default function ConfirmPage() {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="sticky bottom-0 left-0 right-0 bg-[#F8F7F4] border-t border-[#E5E7EB] py-6 px-8 mt-8 -mx-8 z-50">
-          <div className="max-w-[800px] mx-auto flex gap-3 justify-center">
-            <Button
-              variant="outline"
-              className="px-8 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6] bg-white"
-              onClick={() => router.push("/upload")}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium duration-200 ease-in-out disabled:opacity-70"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4 mr-2" />
-                  Confirm & Save Contract
-                </>
-              )}
-            </Button>
-          </div>
+      </div>
+
+      {/* Actions — fixed at bottom, outside scrollable container */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#F8F7F4] border-t border-[#E5E7EB] py-4 px-8 z-50">
+        <div className="max-w-[800px] mx-auto flex gap-3 justify-center">
+          <Button
+            variant="outline"
+            className="px-8 py-3 h-auto border-[#E5E7EB] text-[#737373] hover:bg-[#F3F4F6] bg-white"
+            onClick={() => router.push("/upload")}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="px-8 py-3 h-auto bg-[#F59E0B] hover:bg-[#D97706] text-white font-medium duration-200 ease-in-out disabled:opacity-70"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4 mr-2" />
+                Confirm & Save Contract
+              </>
+            )}
+          </Button>
         </div>
       </div>
     </div>

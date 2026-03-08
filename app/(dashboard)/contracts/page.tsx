@@ -42,6 +42,7 @@ interface Contract {
   type: string;
   description: string;
   amount: string | null;
+  currency: string | null;
   expiry_date: string | null;
   owner: string;
   owner_initial: string;
@@ -121,10 +122,19 @@ const getContractTypeIcon = (type: string, isExpired: boolean = false) => {
   }
 };
 
-// Format currency
-const formatCurrency = (amount: string | null): string => {
+// Format currency with proper symbol and comma grouping
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$', MYR: 'RM', SGD: 'S$', GBP: '£', EUR: '€',
+  AUD: 'A$', INR: '₹', PHP: '₱', IDR: 'Rp', CAD: 'C$',
+  JPY: '¥', CNY: '¥', HKD: 'HK$', THB: '฿', KRW: '₩',
+};
+
+const formatCurrency = (amount: string | null, currency: string | null): string => {
   if (!amount) return 'N/A';
-  return amount;
+  const num = parseFloat(amount.replace(/[^0-9.-]/g, ''));
+  if (isNaN(num)) return amount;
+  const symbol = CURRENCY_SYMBOLS[currency || 'USD'] || (currency ? `${currency} ` : '$');
+  return `${symbol}${num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 };
 
 export default function ContractsPage() {
@@ -196,7 +206,8 @@ export default function ContractsPage() {
         name: item.name || item.title || 'Untitled Contract',
         type: item.type || 'Other',
         description: item.summary || item.description || 'No description available',
-        amount: item.amount ? `$${item.amount}` : null,
+        amount: item.amount || null,
+        currency: item.currency || null,
         expiry_date: item.expiry_date,
         owner: item.owner || 'You',
         owner_initial: item.owner?.charAt(0).toUpperCase() || 'Y',
@@ -649,7 +660,7 @@ export default function ContractsPage() {
                       <div className="flex items-center justify-between pt-4 border-t border-[#F3F4F6]">
                         <div>
                           <p className="text-[11px] text-[#9CA3AF] uppercase tracking-wide mb-0.5">Value</p>
-                          <p className="text-[13px] font-medium text-[#1A1A1A]">{formatCurrency(contract.amount)}</p>
+                          <p className="text-[13px] font-medium text-[#1A1A1A]">{formatCurrency(contract.amount, contract.currency)}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <p className="text-[11px] text-[#9CA3AF] uppercase tracking-wide">Owner</p>
