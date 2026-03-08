@@ -16,6 +16,8 @@ interface UsageData {
   plan: PlanKey;
   analysesUsed: number;
   analysesLimit: number;
+  comparisonsUsed: number;
+  comparisonsLimit: number;
   contractCount: number;
   contractLimit: number;
 }
@@ -53,7 +55,7 @@ export default function SubscriptionManager() {
 
       const [{ data: sub }, { data: profile }, { count: contractCount }] = await Promise.all([
         supabaseClient.from("subscriptions").select("*").eq("user_id", user.id).single(),
-        supabaseClient.from("profiles").select("plan, analyses_used, analyses_reset_date").eq("id", user.id).single(),
+        supabaseClient.from("profiles").select("plan, analyses_used, analyses_reset_date, comparisons_used, comparisons_reset_date").eq("id", user.id).single(),
         supabaseClient.from("contracts").select("*", { count: "exact", head: true }).eq("user_id", user.id),
       ]);
 
@@ -65,6 +67,8 @@ export default function SubscriptionManager() {
         plan,
         analysesUsed: profile?.analyses_used || 0,
         analysesLimit: limits.analyses,
+        comparisonsUsed: profile?.comparisons_used || 0,
+        comparisonsLimit: limits.comparisons,
         contractCount: contractCount || 0,
         contractLimit: limits.contracts,
       });
@@ -211,6 +215,21 @@ export default function SubscriptionManager() {
 
             <div>
               <div className="flex justify-between text-sm mb-1">
+                <span className="text-[#6B7280]">AI Comparisons{usage.plan === "free" ? " (lifetime)" : ""}</span>
+                <span className="font-medium text-[#1A1A1A]">
+                  {usage.comparisonsUsed} / {usage.comparisonsLimit}
+                </span>
+              </div>
+              <div className="h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#F59E0B] rounded-full transition-all"
+                  style={{ width: `${Math.min((usage.comparisonsUsed / usage.comparisonsLimit) * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-sm mb-1">
                 <span className="text-[#6B7280]">Contracts Stored</span>
                 <span className="font-medium text-[#1A1A1A]">
                   {usage.contractCount} / {usage.contractLimit === Infinity ? "∞" : usage.contractLimit}
@@ -255,7 +274,7 @@ export default function SubscriptionManager() {
                         <p className="font-semibold text-[#1A1A1A]">{details.name}</p>
                         <p className="text-sm text-[#6B7280]">
                           {details.contracts === Infinity ? "Unlimited" : details.contracts} contracts ·{" "}
-                          {details.analyses} analyses/mo · {details.seats} seat{details.seats > 1 ? "s" : ""}
+                          {details.analyses} analyses/mo · {details.comparisons} comparisons/mo · {details.seats} seat{details.seats > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>

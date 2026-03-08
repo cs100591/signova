@@ -9,8 +9,8 @@ const plans = [
     features: [
       "3 contracts stored",
       "3 AI analyses",
+      "1 AI comparison",
       "Core risk analysis",
-      "Plain language explanations",
     ],
     cta: "Get Started Free",
     href: "/login",
@@ -22,10 +22,9 @@ const plans = [
     period: "/month",
     features: [
       "50 contracts",
-      "30 AI analyses/month",
-      "Full analysis + chat",
+      "25 AI analyses/month",
+      "3 AI comparisons/month",
       "Expiry email alerts",
-      "Priority support",
     ],
     cta: "Start Free Trial",
     href: "/login",
@@ -37,12 +36,25 @@ const plans = [
     period: "/month",
     features: [
       "Unlimited contracts",
-      "100 AI analyses/month",
-      "Team workspace (5)",
-      "3 seats included",
-      "Share with lawyers",
+      "80 AI analyses/month",
+      "15 AI comparisons/month",
+      "5 workspaces · 3 seats",
     ],
     cta: "Start Free Trial",
+    href: "/login",
+    popular: false,
+  },
+  {
+    name: "Business",
+    price: "$69",
+    period: "/month",
+    features: [
+      "Unlimited contracts",
+      "300 AI analyses/month",
+      "50 AI comparisons/month",
+      "Unlimited workspaces · 10 seats",
+    ],
+    cta: "Start Business",
     href: "/login",
     popular: false,
   },
@@ -59,7 +71,7 @@ export default function Pricing() {
           <p className="text-[#7a7168]">Start free. Upgrade when you need more.</p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {plans.map((plan) => (
             <div
               key={plan.name}

@@ -5,6 +5,7 @@ import {
   BarChart3,
   FileText,
   Sparkles,
+  GitCompareArrows,
   Users,
   Zap,
   Calendar,
@@ -20,6 +21,8 @@ interface UsageStats {
   contractUsed: number;
   analysisLimit: number;
   analysisUsed: number;
+  comparisonLimit: number;
+  comparisonUsed: number;
   memberLimit: number;
   memberUsed: number;
   billingCycle: string;
@@ -31,6 +34,7 @@ const PLAN_DETAILS: Record<string, {
   price: string;
   contractLimit: number | null;
   analysisLimit: number;
+  comparisonLimit: number;
   memberLimit: number;
   features: string[];
 }> = {
@@ -39,32 +43,36 @@ const PLAN_DETAILS: Record<string, {
     price: "$0",
     contractLimit: 3,
     analysisLimit: 3,
+    comparisonLimit: 1,
     memberLimit: 1,
-    features: ["3 contracts", "3 AI analyses", "1 workspace"],
+    features: ["3 contracts", "3 AI analyses", "1 comparison", "1 workspace"],
   },
   solo: {
     name: "Solo",
     price: "$9.9/mo",
     contractLimit: 50,
-    analysisLimit: 30,
+    analysisLimit: 25,
+    comparisonLimit: 3,
     memberLimit: 1,
-    features: ["50 contracts", "30 AI analyses/month", "1 workspace"],
+    features: ["50 contracts", "25 AI analyses/month", "3 comparisons/month", "Expiry reminders"],
   },
   pro: {
     name: "Pro",
     price: "$29/mo",
     contractLimit: null,
-    analysisLimit: 100,
+    analysisLimit: 80,
+    comparisonLimit: 15,
     memberLimit: 3,
-    features: ["Unlimited contracts", "100 AI analyses/month", "5 workspaces"],
+    features: ["Unlimited contracts", "80 AI analyses/month", "15 comparisons/month", "5 workspaces"],
   },
   business: {
     name: "Business",
     price: "$69/mo",
     contractLimit: null,
-    analysisLimit: 500,
+    analysisLimit: 300,
+    comparisonLimit: 50,
     memberLimit: 10,
-    features: ["Unlimited contracts", "500 AI analyses/month", "Unlimited workspaces"],
+    features: ["Unlimited contracts", "300 AI analyses/month", "50 comparisons/month", "Unlimited workspaces"],
   },
 };
 
@@ -85,7 +93,7 @@ export default function UsageStatsPanel() {
       // Get profile
       const { data: profile } = await supabaseClient
         .from("profiles")
-        .select("plan, analyses_used, analyses_reset_date")
+        .select("plan, analyses_used, analyses_reset_date, comparisons_used, comparisons_reset_date")
         .eq("id", user.id)
         .single();
 
@@ -122,6 +130,8 @@ export default function UsageStatsPanel() {
         contractUsed: contractCount || 0,
         analysisLimit: planInfo.analysisLimit,
         analysisUsed: profile?.analyses_used || analysisCount || 0,
+        comparisonLimit: planInfo.comparisonLimit,
+        comparisonUsed: profile?.comparisons_used || 0,
         memberLimit: planInfo.memberLimit,
         memberUsed: 1, // Just the user themselves for now
         billingCycle: "Monthly",
@@ -251,6 +261,38 @@ export default function UsageStatsPanel() {
             )}
           </div>
 
+          {/* AI Comparisons */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <GitCompareArrows className="w-4 h-4 text-[#6B7280]" />
+                <span className="text-sm text-[#374151]">AI Comparisons</span>
+              </div>
+              <span className="text-sm font-medium text-[#1A1A1A]">
+                {stats.comparisonUsed} / {stats.comparisonLimit}
+                {stats.plan === "free" && (
+                  <span className="text-xs text-[#6B7280] ml-1">(lifetime)</span>
+                )}
+              </span>
+            </div>
+            <div className="h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
+              <div
+                className={`h-full ${getProgressColor(getPercentage(stats.comparisonUsed, stats.comparisonLimit))}`}
+                style={{
+                  width: `${getPercentage(stats.comparisonUsed, stats.comparisonLimit)}%`,
+                }}
+              />
+            </div>
+            {getPercentage(stats.comparisonUsed, stats.comparisonLimit) > 80 && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                {stats.plan === "free"
+                  ? "Upgrade for more comparisons"
+                  : "You are approaching your monthly limit"}
+              </p>
+            )}
+          </div>
+
           {/* Team Members */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -289,7 +331,7 @@ export default function UsageStatsPanel() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4 text-green-500" />
@@ -307,13 +349,28 @@ export default function UsageStatsPanel() {
           <div className="flex items-center gap-2 mb-2">
             <BarChart3 className="w-4 h-4 text-[#F59E0B]" />
             <span className="text-xs text-[#6B7280] uppercase tracking-wide">
-              AI Analyses
+              Analyses
             </span>
           </div>
           <p className="text-2xl font-bold text-[#1A1A1A]">
             {stats.analysisUsed}
           </p>
-          <p className="text-sm text-[#6B7280]">Used this month</p>
+          <p className="text-sm text-[#6B7280]">This month</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <GitCompareArrows className="w-4 h-4 text-blue-500" />
+            <span className="text-xs text-[#6B7280] uppercase tracking-wide">
+              Compares
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-[#1A1A1A]">
+            {stats.comparisonUsed}
+          </p>
+          <p className="text-sm text-[#6B7280]">
+            {stats.plan === "free" ? "Lifetime" : "This month"}
+          </p>
         </div>
       </div>
     </div>
