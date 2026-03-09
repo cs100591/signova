@@ -33,22 +33,44 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get workspaces where user is owner or member
-    const { data: workspaces, error } = await supabase
-      .from("workspaces")
-      .select(`
-        id,
-        name,
-        created_at,
-        owner_id,
-        workspace_members (
-          user_id
-        )
-      `)
-      .order("created_at", { ascending: true });
+    // Use admin client to bypass RLS — user may be a member but not owner
+    const { createClient } = await import("@supabase/supabase-js");
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    // Get workspace IDs where user is a member (any role)
+    const { data: memberships } = await adminSupabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", user.id);
+
+    const memberWorkspaceIds = (memberships || []).map((m: any) => m.workspace_id);
+
+    // Fetch those workspaces
+    let workspaces: any[] = [];
+    let error: any = null;
+    if (memberWorkspaceIds.length > 0) {
+      const result = await adminSupabase
+        .from("workspaces")
+        .select(`
+          id,
+          name,
+          created_at,
+          owner_id,
+          workspace_members (
+            user_id
+          )
+        `)
+        .in("id", memberWorkspaceIds)
+        .order("created_at", { ascending: true });
+      workspaces = result.data || [];
+      error = result.error;
+    }
 
     // Fetch personal contract count
-    const { count: personalCount } = await supabase
+    const { count: personalCount } = await adminSupabase
       .from("contracts")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
@@ -74,7 +96,7 @@ export async function GET() {
     
     const contractCounts: Record<string, number> = {};
     if (workspaceIds.length > 0) {
-      const { data: contracts } = await supabase
+      const { data: contracts } = await adminSupabase
         .from("contracts")
         .select("workspace_id")
         .in("workspace_id", workspaceIds);
