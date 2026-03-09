@@ -14,8 +14,15 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Use admin client to bypass RLS — invited user isn't a workspace member yet
+    const { createClient } = await import('@supabase/supabase-js');
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     // Fetch invitation
-    const { data: invite, error: inviteError } = await supabase
+    const { data: invite, error: inviteError } = await adminSupabase
       .from("workspace_invitations")
       .select("*")
       .eq("token", token)
@@ -37,13 +44,6 @@ export async function POST(
     if (invite.invited_email !== "link-invite" && invite.invited_email !== user.email) {
       return NextResponse.json({ error: "This invitation was sent to a different email address." }, { status: 403 });
     }
-
-    // Use admin client to bypass RLS for insertion/update since the token has been successfully verified
-    const { createClient } = await import('@supabase/supabase-js');
-    const adminSupabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
 
     // Check if user is already a member
     const { data: existingMember } = await adminSupabase

@@ -14,8 +14,15 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Use service role to bypass RLS — invited user isn't a workspace member yet
+    const { createClient } = await import("@supabase/supabase-js");
+    const adminSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     // Fetch invitation
-    const { data: invite, error: inviteError } = await supabase
+    const { data: invite, error: inviteError } = await adminSupabase
       .from("workspace_invitations")
       .select(`
         *,
@@ -32,7 +39,7 @@ export async function GET(
     let inviter_name = "Unknown";
     let inviter_email = invite.invited_email; // fallback
     if (invite.invited_by) {
-      const { data: profile } = await supabase
+      const { data: profile } = await adminSupabase
         .from("profiles")
         .select("full_name, email")
         .eq("id", invite.invited_by)
