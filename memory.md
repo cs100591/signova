@@ -98,7 +98,7 @@ When working with PDFs on Vercel:
 |---|---|---|---|---|
 | Contracts | 3 | 50 | Unlimited | Unlimited |
 | AI Analyses | 3 | **25/mo** | **80/mo** | **300/mo** |
-| AI Comparisons | **1** (lifetime) | **3/mo** | **15/mo** | **50/mo** |
+| AI Comparisons | **1/mo** | **3/mo** | **15/mo** | **50/mo** |
 | Expiry Reminders | No | Yes | Yes | Yes |
 | Workspaces | 1 | 1 | 5 | Unlimited |
 | Seats | 1 | 1 | 3 | 10 |
@@ -106,7 +106,7 @@ When working with PDFs on Vercel:
 ### Files Updated (4 phases)
 **Phase 1 — Core Quota:**
 - `lib/plans.ts` — Single source of truth for plan definitions (analyses + comparisons)
-- `lib/usage.ts` — Added `canCompareContract()`, `incrementComparisonUsage()`, free = lifetime quota
+- `lib/usage.ts` — Added `canCompareContract()`, `incrementComparisonUsage()`
 - `app/api/contracts/compare/route.ts` — GET (history + reload), POST (quota check + increment)
 - `app/api/admin/migrate/route.ts` — Added `comparisons_used`, `comparisons_reset_date` columns
 
@@ -124,15 +124,64 @@ When working with PDFs on Vercel:
 - `lib/emails/onboarding.js` — Updated quota numbers (30→25), added AI Compare as paid feature highlight
 
 ### Key Design Decisions
-- **Free comparisons = lifetime** (not monthly): 1 comparison ever, no reset
-- **Paid comparisons = monthly**: reset on billing cycle like analyses
+- **ALL plans reset comparisons monthly** (including Free) — changed from lifetime to monthly
 - **History reload = free**: re-extracts chunks from PDFs but reuses stored AI analysis (no API cost)
 - **`usage-stats.tsx` has its own PLAN_DETAILS**: Does NOT import from `lib/plans.ts` — both must be updated when quotas change
 
-### DB Migration Required
-POST `/api/admin/migrate?secret=signova-migrate-2026` to add:
+### DB Migration (Completed)
+Columns added to `profiles` table (confirmed exist):
 - `comparisons_used INTEGER DEFAULT 0`
 - `comparisons_reset_date DATE`
 
+## Bug Fixes (2026-03-09)
+
+### 1. Duplicate Detection Modal — Button Overflow
+**File:** `app/(dashboard)/upload/page.tsx:215-221`
+**Problem:** Two `w-full` buttons in `flex gap-4` overflowed the card container.
+**Fix:** Changed to `flex-1 min-w-0` so buttons share space equally.
+
+### 2. Confirm Page — Bottom Buttons Overlap
+**File:** `app/(dashboard)/confirm/page.tsx:489-517`
+**Problem:** `sticky bottom-0` then `fixed bottom-0` both caused overlap with the 260px sidebar and mobile bottom nav.
+**Fix:** Removed fixed/sticky entirely. Buttons are now in normal document flow (`mt-8 pb-8`) — they scroll with the form content, no positioning conflicts.
+
+### 3. Contract Value Parsing — Multiple Values Concatenated
+**Problem:** AI returns `"MYR 5,500 monthly rent; MYR 11,000 deposit"` → old regex `replace(/[^\d.]/g, "")` strips everything → concatenates into `550011000`.
+**Three-part fix:**
+
+**3a. Parsing** (`confirm/page.tsx:137-143`):
+- Changed from `replace(/[^\d.]/g, "")` to `match(/[\d,]+\.?\d*/)` — extracts only the FIRST number.
+
+**3b. Currency Display** (`contracts/page.tsx` + `contracts/[id]/page.tsx`):
+- Removed hardcoded `$` prefix.
+- Added `CURRENCY_SYMBOLS` map (RM, S$, £, etc.) and `formatCurrency(amount, currency)` with proper comma grouping.
+- `amount` can be number OR string from DB — always coerce with `String()` before `.replace()`.
+- **IMPORTANT:** `formatCurrency` signature is `(amount: string | number | null, currency: string | null)` — must handle numbers from Supabase.
+
+**3c. AI Prompt** (`lib/ai.ts:217`):
+- Updated extraction prompt to instruct Haiku: return amount as a plain number (no symbols/commas/text), return only the primary recurring value for monthly contracts, and return a separate `currency` field (3-letter code).
+
+### 4. /contracts Page Crash — TypeError: e.replace is not a function
+**Problem:** `contract.amount` comes from Supabase as a number (not string), so `.replace()` on it throws.
+**Fix:** Added `String()` coercion in `formatCurrency()` before calling `.replace()`.
+
+### 5. Comparisons — All Plans Monthly Reset
+**Problem:** Free plan had lifetime (never reset) comparison quota, user wanted all plans to reset monthly.
+**Fix:**
+- `lib/usage.ts`: Removed `if (plan !== 'free')` guard in `canCompareContract()` and `incrementComparisonUsage()`. Monthly reset now applies to all plans.
+- `components/usage-stats.tsx`: Removed "(lifetime)" label and free-specific warning text.
+- `components/settings/subscription-manager.tsx`: Removed "(lifetime)" label.
+
+### DB Data Fixes Applied
+Manually corrected existing contracts with wrong values from old parsing:
+- SOFTWARE LICENSE (`066fd7f8`): `360,003,000` → `36,000` MYR
+- 2x Shah Alam Tenancy (`42cdc129`, `50ac72ed`): `$4,200.01 USD` → `RM4,200 MYR`
+- 9 contracts: currency `USD` → `MYR` (all had MYR in their summaries, defaulted to USD before the AI prompt fix)
+
 ## Pending Issues
 - Stripe Checkout is still failing in production with 'An error occurred with our connection to Stripe'. Need to check the detailed error modal output or Vercel edge function logs post-deployment to isolate if it is an invalid Price ID issue, an empty email customer creation issue, or a success_url formatting issue.
+
+## Next Steps (from AGENTS.md)
+- Phase 1.5: OCR support for scanned contracts (Google Vision)
+- Phase 2: Dashboard (4-stat cards on home), Quick Ask chips, Finding card copy/collapse, Filters, PDF export
+- Expiry reminder email system (Cron job) — Phase 1 item 6, still pending
