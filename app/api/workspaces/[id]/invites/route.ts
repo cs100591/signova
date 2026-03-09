@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import { Resend } from "resend";
+import { workspaceInvitationTemplate } from "@/lib/emailTemplates.js";
 import crypto from "crypto";
 
 export async function POST(
@@ -62,7 +64,44 @@ export async function POST(
       throw inviteError;
     }
 
-    // NOTE: In production, send email using Resend here
+    // Send invitation email via Resend
+    try {
+      // Fetch inviter profile and workspace name for the email
+      const [profileRes, workspaceRes] = await Promise.all([
+        adminSupabase.from("profiles").select("full_name").eq("id", user.id).single(),
+        adminSupabase.from("workspaces").select("name").eq("id", id).single(),
+      ]);
+
+      const inviterName = profileRes.data?.full_name || user.email || "A teammate";
+      const workspaceName = workspaceRes.data?.name || "a workspace";
+      const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.signova.me"}/invite/${token}`;
+
+      const { subject, html } = workspaceInvitationTemplate({
+        inviterName,
+        workspaceName,
+        role: role || "Member",
+        inviteUrl,
+      });
+
+      if (process.env.RESEND_API_KEY) {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const { error: emailError } = await resend.emails.send({
+          from: "Signova <noreply@signova.me>",
+          to: email,
+          subject,
+          html,
+        });
+        if (emailError) {
+          console.error("[Invite] Email send failed:", emailError);
+          // Invitation is saved — don't fail the request, just log
+        }
+      } else {
+        console.log("[Invite] RESEND_API_KEY not set, skipping email to:", email);
+      }
+    } catch (emailErr) {
+      console.error("[Invite] Email send error:", emailErr);
+      // Invitation record is already created — don't fail the whole request
+    }
 
     return NextResponse.json({ success: true, message: "Invitation sent" });
 

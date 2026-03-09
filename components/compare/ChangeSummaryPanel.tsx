@@ -126,8 +126,9 @@ export default function ChangeSummaryPanel({ matches, onSelectMatch, chunksA, ch
                   <button
                     key={index}
                     onClick={() => {
-                      setExpandedIndex(isExpanded ? null : index);
-                      onSelectMatch(index);
+                      const willExpand = !isExpanded;
+                      setExpandedIndex(willExpand ? index : null);
+                      if (willExpand) onSelectMatch(index);
                     }}
                     className="w-full text-left rounded-lg border border-[#e0d9ce] bg-white px-3 py-2.5 hover:border-[#c8873a] hover:shadow-sm transition-all"
                   >

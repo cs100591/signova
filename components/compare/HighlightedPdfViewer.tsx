@@ -48,26 +48,7 @@ function getHighlightColor(chunk: ComparedChunk): string {
 }
 
 function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
-  console.log("[chunksToHighlights] Input chunks:", {
-    total: chunks.length,
-    withRiskLevel: chunks.filter(c => c.riskLevel).length,
-    withRiskChange: chunks.filter(c => c.riskChange).length,
-    withChangeType: chunks.filter(c => c.changeType).length,
-    sampleChunks: chunks.slice(0, 3).map(c => ({
-      id: c.id,
-      riskLevel: c.riskLevel,
-      riskChange: c.riskChange,
-      changeType: c.changeType,
-      coords: { x: c.x, y: c.y, w: c.width, h: c.height, page: c.page }
-    }))
-  });
-
   const filtered = chunks.filter((c) => getHighlightColor(c) !== "transparent");
-  console.log("[chunksToHighlights] After color filter:", {
-    passed: filtered.length,
-    rejected: chunks.length - filtered.length,
-    colors: filtered.map(c => ({ id: c.id, color: getHighlightColor(c) }))
-  });
 
   const highlights = filtered.map((chunk) => {
     // Use actual PDF page dimensions if available, fallback to US Letter (612x792)
@@ -105,7 +86,6 @@ function chunksToHighlights(chunks: ComparedChunk[]): IHighlight[] {
     };
   });
 
-  console.log("[chunksToHighlights] Output highlights:", highlights.length);
   return highlights;
 }
 
@@ -114,13 +94,6 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
     const scrollRef = useRef<(highlight: IHighlight) => void>(() => {});
     const containerRef = useRef<HTMLDivElement>(null);
     const highlights = chunksToHighlights(chunks);
-
-    console.log("[HighlightedPdfViewer] Render:", {
-      label,
-      inputChunks: chunks.length,
-      outputHighlights: highlights.length,
-      highlightIds: highlights.map(h => h.id)
-    });
 
     useImperativeHandle(ref, () => ({
       scrollToChunk(chunkId: string) {
@@ -155,14 +128,6 @@ const HighlightedPdfViewer = forwardRef<HighlightedPdfViewerHandle, Props>(
                 highlightTransform={(highlight, index, setTip, hideTip, _viewportToScaled, _screenshot, isScrolledTo) => {
                   const chunk = chunks.find((c) => c.id === highlight.id);
                   const color = chunk ? getHighlightColor(chunk) : "#3B82F6";
-                  console.log("[highlightTransform] Rendering:", {
-                    index,
-                    highlightId: highlight.id,
-                    foundChunk: !!chunk,
-                    color,
-                    page: highlight.position.pageNumber,
-                    rects: highlight.position.rects.length
-                  });
                   return (
                     <ColoredHighlight
                       key={index}

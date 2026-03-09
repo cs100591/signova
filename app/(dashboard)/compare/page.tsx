@@ -68,10 +68,12 @@ function buildViewerChunks(
     
     samePageChunks.forEach(nearbyChunk => {
       const yDiff = nearbyChunk.y - matchedChunk.y;
+      const xDiff = Math.abs(nearbyChunk.x - matchedChunk.x);
       const downThreshold = isTitle ? 200 : 120;
       const upThreshold = 40;
-      
-      if ((yDiff > 0 && yDiff < downThreshold) || (yDiff < 0 && yDiff > -upThreshold)) {
+      const xThreshold = 100; // avoid bleeding into adjacent columns
+
+      if (xDiff < xThreshold && ((yDiff > 0 && yDiff < downThreshold) || (yDiff < 0 && yDiff > -upThreshold))) {
         expansions.push({ chunkId: nearbyChunk.id, match: data.match, matchIndex: data.matchIndex });
       }
     });
@@ -155,8 +157,8 @@ export default function ComparePage() {
   const handleCompare = useCallback(async () => {
     if (!contractA || !contractB) return;
 
-    // Check quota client-side
-    if (comparisonsUsed >= comparisonsLimit) {
+    // Check quota client-side (skip if limit hasn't loaded yet)
+    if (comparisonsLimit > 0 && comparisonsUsed >= comparisonsLimit) {
       setError("COMPARISON_LIMIT_REACHED");
       return;
     }
@@ -251,29 +253,39 @@ export default function ComparePage() {
   // Sync scroll between left and right PDF viewers
   useEffect(() => {
     if (!result) return;
+
+    let containerA: HTMLElement | null = null;
+    let containerB: HTMLElement | null = null;
+    let onScrollA: (() => void) | null = null;
+    let onScrollB: (() => void) | null = null;
+
     const timer = setTimeout(() => {
-      const containerA = viewerARef.current?.getScrollContainer();
-      const containerB = viewerBRef.current?.getScrollContainer();
+      containerA = viewerARef.current?.getScrollContainer() ?? null;
+      containerB = viewerBRef.current?.getScrollContainer() ?? null;
       if (!containerA || !containerB) return;
 
-      const handleScroll = (source: HTMLElement, target: HTMLElement) => () => {
+      onScrollA = () => {
         if (isSyncing.current) return;
         isSyncing.current = true;
-        target.scrollTop = source.scrollTop;
+        containerB!.scrollTop = containerA!.scrollTop;
+        requestAnimationFrame(() => { isSyncing.current = false; });
+      };
+      onScrollB = () => {
+        if (isSyncing.current) return;
+        isSyncing.current = true;
+        containerA!.scrollTop = containerB!.scrollTop;
         requestAnimationFrame(() => { isSyncing.current = false; });
       };
 
-      const onScrollA = handleScroll(containerA, containerB);
-      const onScrollB = handleScroll(containerB, containerA);
       containerA.addEventListener("scroll", onScrollA);
       containerB.addEventListener("scroll", onScrollB);
-
-      return () => {
-        containerA.removeEventListener("scroll", onScrollA);
-        containerB.removeEventListener("scroll", onScrollB);
-      };
     }, 1000);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(timer);
+      if (containerA && onScrollA) containerA.removeEventListener("scroll", onScrollA);
+      if (containerB && onScrollB) containerB.removeEventListener("scroll", onScrollB);
+    };
   }, [result]);
 
   const chunksA = result
